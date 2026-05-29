@@ -1,0 +1,2386 @@
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { motion } from "motion/react";
+import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+import { TouchBackend } from "react-dnd-touch-backend";
+import { useStore } from "../store";
+import { TraceLetter } from "../components/TraceLetter";
+
+const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || (navigator as any).maxTouchPoints > 0);
+const DndBackend = isTouch ? TouchBackend : HTML5Backend;
+const DND_TYPE = "phoneme-tile";
+import {
+  Volume2, Mic, Flame, ChevronRight, Trophy, BarChart2,
+  User, Home, BookOpen, Gift, Lock, Check, ArrowRight,
+  Sparkles, Zap, Shield, Award, Target, Clock,
+  ChevronLeft, Settings, Star, RefreshCw, Heart, TrendingUp, Play
+} from "lucide-react";
+
+// ─── Color palette ────────────────────────────────────────────────────────────
+const C = {
+  bg: "#FFFDF5",
+  primary: "#6C47FF",
+  primaryDark: "#553AC9",
+  primarySoft: "#EFE9FF",
+  teal: "#5DCAA5",
+  tealSoft: "#E1F5EC",
+  amber: "#F4A261",
+  amberSoft: "#FEF3E8",
+  sky: "#7FB8E0",
+  skySoft: "#E8F4FD",
+  blush: "#F4B4C8",
+  blushSoft: "#FDE8EF",
+  yellow: "#FFCC00",
+  yellowSoft: "#FFF8E1",
+  ink: "#1A1A2E",
+  muted: "#6B6B8A",
+  white: "#FFFFFF",
+  lexi: "#C4B0FF",
+  lexiDark: "#9B7EFF",
+  glow: "#FFD166",
+  glowDark: "#F0BB30",
+  echoDark: "#3DB88A",
+};
+
+// ─── Typography helpers ───────────────────────────────────────────────────────
+const dyslexicFont = "'OpenDyslexic', 'Comic Sans MS', cursive";
+const uiFont = "'Lexend', sans-serif";
+
+// ─── Speech synthesis helper (TTS) ────────────────────────────────────────────
+type SpeakOpts = { rate?: number; pitch?: number };
+function pickVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  return voices.find(v => /en-(US|GB)/.test(v.lang) && /(Samantha|Karen|Google US English|Microsoft Aria)/i.test(v.name))
+    || voices.find(v => v.lang.startsWith("en"))
+    || null;
+}
+function utterance(text: string, opts: SpeakOpts = {}) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = opts.rate ?? 0.75;
+  u.pitch = opts.pitch ?? 1.1;
+  u.lang = "en-US";
+  const v = pickVoice();
+  if (v) u.voice = v;
+  return u;
+}
+function speak(text: string, opts: SpeakOpts = {}) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  try {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance(text, opts));
+  } catch {}
+}
+// Say a single phoneme's sound in isolation, e.g. "sh" → drawn-out "shhhh"
+function speakPhoneme(letters: string) {
+  const k = letters.toLowerCase();
+  const map: Record<string, { text: string; rate: number }> = {
+    sh: { text: "shhhh", rate: 0.4 },
+    ch: { text: "ch ch ch", rate: 0.45 },
+    th: { text: "thhh", rate: 0.4 },
+    i: { text: "ih", rate: 0.55 },
+    a: { text: "ah", rate: 0.55 },
+    e: { text: "eh", rate: 0.55 },
+    o: { text: "ah", rate: 0.55 },
+    u: { text: "uh", rate: 0.55 },
+    p: { text: "puh", rate: 0.55 },
+    t: { text: "tuh", rate: 0.55 },
+    r: { text: "rr", rate: 0.5 },
+  };
+  const entry = map[k] ?? { text: letters, rate: 0.5 };
+  speak(entry.text, { rate: entry.rate });
+}
+// Sound out a phoneme + word, e.g. ("sh", "ship") → "shh... shh... ship"
+function speakLesson(phoneme: string, word: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const synth = window.speechSynthesis;
+  try {
+    synth.cancel();
+    const phonemeText = phoneme.toLowerCase() === "sh" ? "shhhh"
+      : phoneme.toLowerCase() === "ch" ? "chhh"
+      : phoneme.toLowerCase() === "th" ? "thhh"
+      : phoneme;
+    const queue = [
+      utterance(phonemeText, { rate: 0.45, pitch: 1.05 }),
+      utterance(phonemeText, { rate: 0.45, pitch: 1.05 }),
+      utterance(word, { rate: 0.6, pitch: 1.1 }),
+    ];
+    // Chain with small gaps via onend
+    let i = 0;
+    const playNext = () => {
+      if (i >= queue.length) return;
+      const u = queue[i++];
+      u.onend = () => setTimeout(playNext, 220);
+      synth.speak(u);
+    };
+    playNext();
+  } catch {}
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Screen = "splash" | "onboard" | "home" | "learn" | "lesson" | "progress" | "rewards" | "profile";
+type LessonStep = "hear" | "see" | "trace" | "say" | "build" | "win";
+type Tab = "home" | "learn" | "progress" | "rewards" | "profile";
+type MicState = "idle" | "listening" | "processing" | "encourage";
+type WinVariant = "small" | "streak" | "level";
+
+// ─── Lexi mascot (lavender, star wand) ───────────────────────────────────────
+function Lexi({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
+  const happy = pose === "happy" || pose === "celebrating";
+  const s = size / 100;
+  return (
+    <svg width={size} height={size * 1.2} viewBox="0 0 100 120" style={{ overflow: "visible" }}>
+      {/* Body glow on celebrate */}
+      {pose === "celebrating" && (
+        <ellipse cx="50" cy="65" rx="48" ry="50" fill={C.lexi} opacity={0.2} />
+      )}
+      {/* Body */}
+      <ellipse cx="50" cy="65" rx="40" ry="44" fill={C.lexi} />
+      <ellipse cx="36" cy="48" rx="14" ry="10" fill="white" fillOpacity={0.28} />
+      {/* Eyes */}
+      <circle cx="38" cy="60" r={happy ? 9.5 : 8.5} fill="white" />
+      <circle cx="62" cy="60" r={happy ? 9.5 : 8.5} fill="white" />
+      <circle cx={happy ? 39.5 : 38.5} cy={happy ? 59 : 60} r={5.5} fill={C.ink} />
+      <circle cx={happy ? 63.5 : 62.5} cy={happy ? 59 : 60} r={5.5} fill={C.ink} />
+      <circle cx={happy ? 41 : 40} cy={happy ? 57 : 58} r={2} fill="white" />
+      <circle cx={happy ? 65 : 64} cy={happy ? 57 : 58} r={2} fill="white" />
+      {/* Cheeks */}
+      {happy && <>
+        <circle cx="26" cy="70" r={7} fill={C.blush} fillOpacity={0.5} />
+        <circle cx="74" cy="70" r={7} fill={C.blush} fillOpacity={0.5} />
+      </>}
+      {/* Mouth */}
+      {happy
+        ? <path d="M 36 74 Q 50 86 64 74" stroke={C.ink} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        : <path d="M 38 73 Q 50 80 62 73" stroke={C.ink} strokeWidth="2" fill="none" strokeLinecap="round" />}
+      {/* Wand */}
+      <line x1="76" y1="44" x2="86" y2="20" stroke={C.amber} strokeWidth="3" strokeLinecap="round" />
+      <circle cx="87" cy="17" r="7" fill={C.yellow} />
+      <text x="80.5" y="21.5" fontSize="10" fill={C.amber} fontWeight="bold">✦</text>
+      {pose === "celebrating" && <>
+        <text x="88" y="35" fontSize="8" fill={C.yellow}>✦</text>
+        <text x="68" y="18" fontSize="7" fill={C.lexi}>✦</text>
+        <text x="92" y="50" fontSize="9" fill={C.amber}>✦</text>
+      </>}
+      {/* Arms */}
+      <ellipse cx="12" cy="70" rx="10" ry="6" fill={C.lexi} transform="rotate(-25 12 70)" />
+      <ellipse cx="88" cy="68" rx="10" ry="6" fill={C.lexi} transform="rotate(20 88 68)" />
+      {/* Feet */}
+      <ellipse cx="38" cy="108" rx="11" ry="7" fill={C.lexiDark} />
+      <ellipse cx="62" cy="108" rx="11" ry="7" fill={C.lexiDark} />
+    </svg>
+  );
+}
+
+// ─── Echo mascot (teal, headphones, big ears) ─────────────────────────────────
+function Echo({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
+  const happy = pose === "happy" || pose === "celebrating";
+  return (
+    <svg width={size} height={size * 1.15} viewBox="0 0 100 115" style={{ overflow: "visible" }}>
+      {/* Big floppy ears */}
+      <ellipse cx="11" cy="54" rx="13" ry="22" fill={C.echoDark} />
+      <ellipse cx="89" cy="54" rx="13" ry="22" fill={C.echoDark} />
+      <ellipse cx="11" cy="54" rx="8" ry="15" fill={C.tealSoft} />
+      <ellipse cx="89" cy="54" rx="8" ry="15" fill={C.tealSoft} />
+      {/* Body */}
+      <ellipse cx="50" cy="64" rx="37" ry="40" fill={C.teal} />
+      <ellipse cx="36" cy="47" rx="13" ry="9" fill="white" fillOpacity={0.2} />
+      {/* Headphone arc */}
+      <path d="M 20 46 Q 50 18 80 46" stroke="#1A6B50" strokeWidth="4.5" fill="none" strokeLinecap="round" />
+      <rect x="13" y="44" width="14" height="18" rx="6" fill="#1A6B50" />
+      <rect x="73" y="44" width="14" height="18" rx="6" fill="#1A6B50" />
+      <rect x="15" y="46" width="10" height="14" rx="4" fill="#2A9B72" />
+      <rect x="75" y="46" width="10" height="14" rx="4" fill="#2A9B72" />
+      {/* Eyes */}
+      <circle cx="38" cy="64" r={happy ? 9.5 : 8.5} fill="white" />
+      <circle cx="62" cy="64" r={happy ? 9.5 : 8.5} fill="white" />
+      <circle cx="39" cy={happy ? 63 : 64} r={5.5} fill={C.ink} />
+      <circle cx="63" cy={happy ? 63 : 64} r={5.5} fill={C.ink} />
+      <circle cx="41" cy={happy ? 61 : 62} r={2} fill="white" />
+      <circle cx="65" cy={happy ? 61 : 62} r={2} fill="white" />
+      {/* Mouth */}
+      {happy
+        ? <path d="M 37 76 Q 50 88 63 76" stroke={C.ink} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        : <path d="M 39 75 Q 50 82 61 75" stroke={C.ink} strokeWidth="2" fill="none" strokeLinecap="round" />}
+      {happy && <>
+        <circle cx="27" cy="73" r={6} fill={C.blush} fillOpacity={0.4} />
+        <circle cx="73" cy="73" r={6} fill={C.blush} fillOpacity={0.4} />
+      </>}
+      {/* Feet */}
+      <ellipse cx="38" cy="103" rx="11" ry="7" fill={C.echoDark} />
+      <ellipse cx="62" cy="103" rx="11" ry="7" fill={C.echoDark} />
+    </svg>
+  );
+}
+
+// ─── Glow mascot (yellow, glasses, book) ─────────────────────────────────────
+function Glow({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
+  const happy = pose === "happy" || pose === "celebrating";
+  return (
+    <svg width={size} height={size * 1.2} viewBox="0 0 100 120" style={{ overflow: "visible" }}>
+      <ellipse cx="50" cy="66" rx="40" ry="44" fill={C.glow} />
+      <ellipse cx="36" cy="48" rx="14" ry="10" fill="white" fillOpacity={0.3} />
+      {/* Glasses */}
+      <rect x="22" y="54" width="22" height="17" rx="6" stroke={C.ink} strokeWidth="2.2" fill="white" fillOpacity={0.7} />
+      <rect x="56" y="54" width="22" height="17" rx="6" stroke={C.ink} strokeWidth="2.2" fill="white" fillOpacity={0.7} />
+      <line x1="44" y1="62" x2="56" y2="62" stroke={C.ink} strokeWidth="2" />
+      <line x1="22" y1="61" x2="15" y2="59" stroke={C.ink} strokeWidth="1.8" />
+      <line x1="78" y1="61" x2="85" y2="59" stroke={C.ink} strokeWidth="1.8" />
+      {/* Eyes */}
+      <circle cx="33" cy={happy ? 62 : 63} r={4.5} fill={C.ink} />
+      <circle cx="67" cy={happy ? 62 : 63} r={4.5} fill={C.ink} />
+      <circle cx="35" cy={happy ? 60 : 61} r={1.8} fill="white" />
+      <circle cx="69" cy={happy ? 60 : 61} r={1.8} fill="white" />
+      {/* Mouth */}
+      {happy
+        ? <path d="M 36 77 Q 50 89 64 77" stroke={C.ink} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        : <path d="M 38 76 Q 50 83 62 76" stroke={C.ink} strokeWidth="2" fill="none" strokeLinecap="round" />}
+      {happy && <>
+        <circle cx="27" cy="75" r={6} fill={C.blush} fillOpacity={0.4} />
+        <circle cx="73" cy="75" r={6} fill={C.blush} fillOpacity={0.4} />
+      </>}
+      {/* Book */}
+      <rect x="58" y="72" width="26" height="20" rx="3" fill={C.primary} />
+      <rect x="58" y="72" width="4" height="20" rx="2" fill={C.primaryDark} />
+      <line x1="64" y1="77" x2="80" y2="77" stroke="white" strokeWidth="1.5" opacity={0.6} />
+      <line x1="64" y1="81" x2="80" y2="81" stroke="white" strokeWidth="1.5" opacity={0.6} />
+      <line x1="64" y1="85" x2="74" y2="85" stroke="white" strokeWidth="1.5" opacity={0.6} />
+      {/* Arms */}
+      <ellipse cx="12" cy="72" rx="10" ry="6" fill={C.glowDark} transform="rotate(-20 12 72)" />
+      <ellipse cx="80" cy="78" rx="12" ry="6" fill={C.glowDark} transform="rotate(12 80 78)" />
+      {/* Feet */}
+      <ellipse cx="38" cy="108" rx="11" ry="7" fill={C.glowDark} />
+      <ellipse cx="62" cy="108" rx="11" ry="7" fill={C.glowDark} />
+    </svg>
+  );
+}
+
+// ─── Bubble mascot (pink, speech bubbles) ────────────────────────────────────
+function Bubble({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
+  const happy = pose === "happy" || pose === "celebrating";
+  return (
+    <svg width={size} height={size * 1.2} viewBox="0 0 100 120" style={{ overflow: "visible" }}>
+      {/* Speech bubble */}
+      <ellipse cx="78" cy="22" rx="15" ry="11" fill="white" opacity={0.92} />
+      <polygon points="72,31 68,38 76,33" fill="white" opacity={0.92} />
+      <text x="70" y="26" fontSize="11" fill={C.primary}>♪</text>
+      {/* Body */}
+      <ellipse cx="50" cy="66" rx="39" ry="43" fill={C.blush} />
+      <ellipse cx="36" cy="48" rx="14" ry="10" fill="white" fillOpacity={0.3} />
+      {/* Eyes */}
+      <circle cx="37" cy="62" r={happy ? 9.5 : 8.5} fill="white" />
+      <circle cx="63" cy="62" r={happy ? 9.5 : 8.5} fill="white" />
+      <circle cx={happy ? 38.5 : 37.5} cy={happy ? 61 : 62} r={5.5} fill={C.ink} />
+      <circle cx={happy ? 64.5 : 63.5} cy={happy ? 61 : 62} r={5.5} fill={C.ink} />
+      <circle cx={happy ? 40 : 39} cy={happy ? 59 : 60} r={2} fill="white" />
+      <circle cx={happy ? 66 : 65} cy={happy ? 59 : 60} r={2} fill="white" />
+      {/* Big round mouth */}
+      <ellipse cx="50" cy="76" rx="11" ry="8" fill={C.ink} />
+      <ellipse cx="50" cy={happy ? 73.5 : 74} rx="8.5" ry="5" fill={happy ? "#FF9EB5" : "#FF7A9A"} />
+      {happy && <>
+        <circle cx="26" cy="70" r={6} fill="white" fillOpacity={0.4} />
+        <circle cx="74" cy="70" r={6} fill="white" fillOpacity={0.4} />
+      </>}
+      {/* Arms */}
+      <ellipse cx="13" cy="70" rx="10" ry="6" fill={C.blush} transform="rotate(-22 13 70)" />
+      <ellipse cx="87" cy="68" rx="10" ry="6" fill={C.blush} transform="rotate(22 87 68)" />
+      {/* Feet */}
+      <ellipse cx="38" cy="108" rx="11" ry="7" fill="#E8A0BA" />
+      <ellipse cx="62" cy="108" rx="11" ry="7" fill="#E8A0BA" />
+    </svg>
+  );
+}
+
+// ─── Brick mascot (orange, phoneme tiles) ────────────────────────────────────
+function Brick({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
+  const happy = pose === "happy" || pose === "celebrating";
+  return (
+    <svg width={size} height={size * 1.2} viewBox="0 0 100 120" style={{ overflow: "visible" }}>
+      {/* Blocky body */}
+      <rect x="12" y="22" width="76" height="80" rx="26" fill={C.amber} />
+      <ellipse cx="36" cy="44" rx="18" ry="12" fill="white" fillOpacity={0.22} />
+      {/* Phoneme tiles it carries */}
+      <rect x="60" y="70" width="18" height="16" rx="4" fill="white" opacity={0.92} />
+      <text x="63" y="82" fontSize="11" fontWeight="bold" fill={C.amber} style={{ fontFamily: uiFont }}>A</text>
+      <rect x="63" y="55" width="18" height="16" rx="4" fill="white" opacity={0.92} />
+      <text x="66" y="67" fontSize="11" fontWeight="bold" fill={C.primaryDark} style={{ fontFamily: uiFont }}>T</text>
+      {/* Eyes */}
+      <circle cx="37" cy="57" r={happy ? 9.5 : 8.5} fill="white" />
+      <circle cx="63" cy="57" r={happy ? 9.5 : 8.5} fill="white" />
+      <circle cx={happy ? 38.5 : 37.5} cy={happy ? 56 : 57} r={5.5} fill={C.ink} />
+      <circle cx={happy ? 64.5 : 63.5} cy={happy ? 56 : 57} r={5.5} fill={C.ink} />
+      <circle cx={happy ? 40 : 39} cy={happy ? 54 : 55} r={2} fill="white" />
+      <circle cx={happy ? 66 : 65} cy={happy ? 54 : 55} r={2} fill="white" />
+      {/* Mouth */}
+      {happy
+        ? <path d="M 35 70 Q 50 82 65 70" stroke={C.ink} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        : <path d="M 37 69 Q 50 76 63 69" stroke={C.ink} strokeWidth="2" fill="none" strokeLinecap="round" />}
+      {happy && <>
+        <circle cx="25" cy="66" r={6} fill={C.blush} fillOpacity={0.5} />
+        <circle cx="75" cy="66" r={6} fill={C.blush} fillOpacity={0.5} />
+      </>}
+      {/* Arms */}
+      <rect x="2" y="60" width="13" height="9" rx="4" fill="#E8924A" />
+      <rect x="85" y="58" width="13" height="9" rx="4" fill="#E8924A" />
+      {/* Feet */}
+      <rect x="24" y="100" width="22" height="14" rx="6" fill="#D8822A" />
+      <rect x="54" y="100" width="22" height="14" rx="6" fill="#D8822A" />
+    </svg>
+  );
+}
+
+// ─── Shared UI primitives ─────────────────────────────────────────────────────
+function PrimaryBtn({ children, onClick, className = "", disabled = false }: {
+  children: React.ReactNode; onClick?: () => void; className?: string; disabled?: boolean;
+}) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.96 }}
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center justify-center gap-2 rounded-2xl font-semibold text-white transition-opacity ${className}`}
+      style={{
+        background: disabled ? "#C4B0FF" : `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+        fontFamily: uiFont,
+        minHeight: 56,
+        boxShadow: disabled ? "none" : "0 8px 24px rgba(108, 71, 255, 0.32)",
+      }}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+function GhostBtn({ children, onClick, className = "" }: {
+  children: React.ReactNode; onClick?: () => void; className?: string;
+}) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className={`flex items-center justify-center gap-2 rounded-2xl font-medium transition-colors ${className}`}
+      style={{
+        fontFamily: uiFont,
+        minHeight: 52,
+        color: C.muted,
+        border: `2px solid ${C.border ?? "rgba(108,71,255,0.16)"}`,
+      }}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+function Card({ children, className = "", style = {} }: {
+  children: React.ReactNode; className?: string; style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={`rounded-3xl ${className}`}
+      style={{
+        background: C.white,
+        boxShadow: "0 4px 20px rgba(108, 71, 255, 0.08)",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ProgressRing({ pct, size = 64, stroke = 6, color = C.primary, bg = C.primarySoft }: {
+  pct: number; size?: number; stroke?: number; color?: string; bg?: string;
+}) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={bg} strokeWidth={stroke} />
+      <circle
+        cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={circ * (1 - pct / 100)}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function StreakFlame({ days = 1, size = 32 }: { days?: number; size?: number }) {
+  const color = days >= 30 ? "#FF4500" : days >= 7 ? "#F4A261" : "#FFD166";
+  const shadow = days >= 30 ? "0 0 16px rgba(255,69,0,0.5)" : days >= 7 ? "0 0 12px rgba(244,162,97,0.4)" : "none";
+  return (
+    <div style={{ position: "relative", width: size, height: size * 1.1 }}>
+      <svg width={size} height={size * 1.1} viewBox="0 0 32 35" style={{ filter: `drop-shadow(${shadow})` }}>
+        <path
+          d="M16 2 C16 2 22 10 22 16 C22 22 18 26 16 28 C14 26 10 22 10 16 C10 10 16 2 16 2Z"
+          fill={color}
+        />
+        <path
+          d="M16 12 C16 12 19 16 19 19 C19 22 17.5 24 16 25 C14.5 24 13 22 13 19 C13 16 16 12 16 12Z"
+          fill="#FFE082"
+        />
+        <circle cx="16" cy="28" r="5" fill={color} opacity={0.3} />
+      </svg>
+    </div>
+  );
+}
+
+function XPBurst({ xp, show }: { xp: number; show: boolean }) {
+  if (!show) return null;
+  return (
+    <motion.div
+      initial={{ scale: 0, opacity: 0, y: 0 }}
+      animate={{ scale: [0, 1.3, 1], opacity: [0, 1, 0], y: -60 }}
+      transition={{ duration: 1.2, ease: "easeOut" }}
+      style={{
+        position: "absolute",
+        top: "40%",
+        left: "50%",
+        transform: "translateX(-50%)",
+        background: `linear-gradient(135deg, ${C.yellow}, ${C.amber})`,
+        borderRadius: 20,
+        padding: "10px 24px",
+        fontFamily: uiFont,
+        fontWeight: 700,
+        fontSize: 24,
+        color: C.ink,
+        boxShadow: "0 8px 24px rgba(244, 162, 97, 0.5)",
+        zIndex: 50,
+        whiteSpace: "nowrap",
+      }}
+    >
+      +{xp} XP ✦
+    </motion.div>
+  );
+}
+
+// ─── Splash Screen ────────────────────────────────────────────────────────────
+function SplashScreen({ onNext }: { onNext: () => void }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-between h-full"
+      style={{ background: `linear-gradient(160deg, #F0EBFF 0%, #FFFDF5 50%, #E1F5EC 100%)`, fontFamily: uiFont, padding: "60px 32px 52px" }}
+    >
+      <div />
+      <div className="flex flex-col items-center gap-8">
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.6, ease: "backOut" }}
+        >
+          <Lexi size={140} pose="happy" />
+        </motion.div>
+        <motion.div
+          initial={{ y: 24, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+          className="flex flex-col items-center gap-3"
+        >
+          <div style={{ fontSize: 52, fontWeight: 800, color: C.primary, letterSpacing: -1 }}>
+            Lexio
+          </div>
+          <div style={{ fontSize: 18, color: C.muted, letterSpacing: 2, fontWeight: 500, textTransform: "uppercase" }}>
+            Read · Speak · Grow
+          </div>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          className="flex gap-2"
+        >
+          {[C.primary, C.teal, C.amber, C.blush].map((c, i) => (
+            <div key={i} style={{ width: 8, height: 8, borderRadius: 4, background: c }} />
+          ))}
+        </motion.div>
+      </div>
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.8 }}
+        className="w-full"
+      >
+        <PrimaryBtn onClick={onNext} className="w-full text-lg">
+          Let's Begin <ArrowRight size={20} />
+        </PrimaryBtn>
+        <p style={{ textAlign: "center", marginTop: 16, color: C.muted, fontSize: 14 }}>
+          Your reading adventure starts here ✦
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+
+// ─── Onboarding Flow ──────────────────────────────────────────────────────────
+function OnboardingFlow({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState(0);
+  const storeName = useStore(s => s.name);
+  const storeAge = useStore(s => s.age);
+  const setStore = useStore(s => s.set);
+  const [name, setName] = useState(storeName);
+  const [age, setAge] = useState<number | null>(storeAge);
+  const ages = [6, 7, 8, 9, 10, 11, 12, "13+"];
+  const allMascots = [
+    { Comp: Lexi, name: "Lexi", desc: "Your guide", color: C.lexi },
+    { Comp: Echo, name: "Echo", desc: "Listens with you", color: C.teal },
+    { Comp: Glow, name: "Glow", desc: "Reads with you", color: C.glow },
+    { Comp: Bubble, name: "Bubble", desc: "Speaks with you", color: C.blush },
+    { Comp: Brick, name: "Brick", desc: "Builds words", color: C.amber },
+  ];
+  const next = () => {
+    if (step < 2) { setStep(step + 1); return; }
+    setStore({ name: name.trim(), age, onboarded: true });
+    onDone();
+  };
+  return (
+    <div className="flex flex-col h-full" style={{ fontFamily: uiFont, background: C.bg }}>
+      {/* Progress dots */}
+      <div className="flex justify-center gap-2 pt-14 pb-4">
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{
+            width: i === step ? 24 : 8, height: 8, borderRadius: 4,
+            background: i <= step ? C.primary : C.primarySoft,
+            transition: "all 0.3s ease"
+          }} />
+        ))}
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-center px-8 gap-8">
+        {step === 0 && (
+          <motion.div key="s0" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-full flex flex-col items-center gap-7">
+            <Lexi size={110} pose="happy" />
+            <div className="text-center">
+              <div style={{ fontSize: 28, fontWeight: 700, color: C.ink, marginBottom: 8 }}>Hi there! 👋</div>
+              <div style={{ fontSize: 16, color: C.muted }}>What should we call you?</div>
+            </div>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Your name..."
+              className="w-full text-center rounded-2xl outline-none"
+              style={{
+                background: C.primarySoft, border: `2px solid ${name ? C.primary : "transparent"}`,
+                padding: "16px 20px", fontSize: 22, fontFamily: uiFont, color: C.ink,
+                transition: "border-color 0.2s",
+              }}
+            />
+          </motion.div>
+        )}
+        {step === 1 && (
+          <motion.div key="s1" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-full flex flex-col items-center gap-7">
+            <Echo size={110} pose="happy" />
+            <div className="text-center">
+              <div style={{ fontSize: 28, fontWeight: 700, color: C.ink, marginBottom: 8 }}>
+                Nice to meet you{name ? `, ${name}` : ""}!
+              </div>
+              <div style={{ fontSize: 16, color: C.muted }}>How old are you?</div>
+            </div>
+            <div className="grid grid-cols-4 gap-3 w-full">
+              {ages.map(a => (
+                <motion.button
+                  key={a}
+                  whileTap={{ scale: 0.94 }}
+                  onClick={() => setAge(typeof a === "number" ? a : 13)}
+                  style={{
+                    padding: "14px 4px",
+                    borderRadius: 16,
+                    fontSize: 18,
+                    fontWeight: 700,
+                    fontFamily: uiFont,
+                    background: age === (typeof a === "number" ? a : 13) ? C.primary : C.primarySoft,
+                    color: age === (typeof a === "number" ? a : 13) ? C.white : C.primary,
+                    border: "none",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {a}
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+        {step === 2 && (
+          <motion.div key="s2" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-full flex flex-col items-center gap-6">
+            <div className="text-center">
+              <div style={{ fontSize: 26, fontWeight: 700, color: C.ink, marginBottom: 6 }}>Meet your friends!</div>
+              <div style={{ fontSize: 15, color: C.muted }}>They're here to help you every step of the way</div>
+            </div>
+            <div className="flex justify-center gap-2 w-full">
+              {allMascots.map(({ Comp, name: n, desc, color }) => (
+                <motion.div
+                  key={n}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: allMascots.findIndex(m => m.name === n) * 0.1, type: "spring" }}
+                  className="flex flex-col items-center gap-1"
+                >
+                  <Comp size={58} pose="happy" />
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.ink }}>{n}</div>
+                  <div style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>{desc}</div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </div>
+      <div className="px-8 pb-12">
+        <PrimaryBtn
+          onClick={next}
+          className="w-full text-lg"
+          disabled={step === 0 && name.trim().length < 2}
+        >
+          {step === 2 ? "Start Learning!" : "Continue"} <ArrowRight size={20} />
+        </PrimaryBtn>
+      </div>
+    </div>
+  );
+}
+
+// ─── Home Screen ──────────────────────────────────────────────────────────────
+const pathNodes = [
+  { id: 1, label: "Short A", emoji: "🅰", done: true, x: 60 },
+  { id: 2, label: "Short E", emoji: "🔤", done: true, x: 220 },
+  { id: 3, label: "SH Sound", emoji: "🔊", done: false, current: true, x: 130 },
+  { id: 4, label: "CH Sound", emoji: "✨", done: false, x: 240 },
+];
+
+function HomeScreen({ onStartLesson, onTabChange }: {
+  onStartLesson: () => void; onTabChange: (t: Tab) => void;
+}) {
+  const name = useStore(s => s.name) || "friend";
+  const streak = useStore(s => s.streak);
+  const greeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  })();
+  return (
+    <div className="flex flex-col h-full overflow-y-auto" style={{ fontFamily: uiFont, background: C.bg }}>
+      {/* Header */}
+      <div className="px-6 pt-14 pb-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.ink }}>{greeting}, {name}! ☀</div>
+            <div style={{ fontSize: 15, color: C.muted }}>Ready to read something great?</div>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onTabChange("profile")}
+            style={{
+              width: 48, height: 48, borderRadius: 24,
+              background: C.primarySoft, display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <User size={22} color={C.primary} />
+          </motion.button>
+        </div>
+      </div>
+      {/* Goal + Streak row */}
+      <div className="px-6 py-4 flex gap-4">
+        <Card className="flex-1 p-4 flex items-center gap-4">
+          <div style={{ position: "relative" }}>
+            <ProgressRing pct={40} size={60} stroke={6} color={C.primary} bg={C.primarySoft} />
+            <div style={{
+              position: "absolute", inset: 0, display: "flex", alignItems: "center",
+              justifyContent: "center", fontSize: 13, fontWeight: 700, color: C.primary
+            }}>40%</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Today's Goal</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>2 of 5 minutes</div>
+            <div className="flex gap-1 mt-2">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} style={{
+                  width: 20, height: 6, borderRadius: 3,
+                  background: i <= 2 ? C.primary : C.primarySoft
+                }} />
+              ))}
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 flex flex-col items-center justify-center gap-1" style={{ minWidth: 80 }}>
+          <StreakFlame days={streak} size={28} />
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.amber }}>{streak}</div>
+          <div style={{ fontSize: 10, color: C.muted }}>day streak</div>
+        </Card>
+      </div>
+      {/* Start CTA */}
+      <div className="px-6 pb-5">
+        <PrimaryBtn onClick={onStartLesson} className="w-full text-xl" style={{ height: 64 }}>
+          <Play size={22} fill="white" />
+          Start Today's Session
+        </PrimaryBtn>
+      </div>
+      {/* Today's Path */}
+      <div className="px-6 pb-3">
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.ink, marginBottom: 12 }}>Today's Path</div>
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            {pathNodes.map((node, i) => (
+              <div key={node.id} className="flex items-center">
+                <div className="flex flex-col items-center gap-1">
+                  <motion.div
+                    whileTap={{ scale: 0.9 }}
+                    onClick={node.current ? onStartLesson : undefined}
+                    style={{
+                      width: 56, height: 56, borderRadius: 28,
+                      background: node.done ? C.teal : node.current
+                        ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`
+                        : C.primarySoft,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: node.current ? `0 6px 20px rgba(108,71,255,0.35)` : "none",
+                      cursor: node.current ? "pointer" : "default",
+                      border: node.current ? `3px solid white` : "none",
+                    }}
+                  >
+                    {node.done
+                      ? <Check size={24} color="white" />
+                      : <span style={{ fontSize: 20 }}>{node.emoji}</span>
+                    }
+                  </motion.div>
+                  <div style={{ fontSize: 9, color: C.muted, textAlign: "center", maxWidth: 56 }}>{node.label}</div>
+                </div>
+                {i < pathNodes.length - 1 && (
+                  <div style={{ width: 20, height: 3, background: pathNodes[i + 1].done || pathNodes[i + 1].current ? C.primary : C.primarySoft, borderRadius: 2, margin: "0 2px 12px" }} />
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      {/* Word of the Day */}
+      <div className="px-6 pb-6">
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.ink, marginBottom: 12 }}>Word of the Day</div>
+        <Card className="p-5" style={{ background: `linear-gradient(135deg, ${C.primarySoft}, #F8F5FF)` }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div style={{
+                fontFamily: dyslexicFont, fontSize: 40, fontWeight: 700,
+                color: C.primary, letterSpacing: 2, lineHeight: 1.2
+              }}>
+                ship
+              </div>
+              <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>
+                A big boat that sails the sea ⛵
+              </div>
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.88 }}
+              onClick={() => speakLesson("sh", "ship")}
+              style={{
+                width: 56, height: 56, borderRadius: 28,
+                background: C.primary, display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: `0 6px 18px rgba(108,71,255,0.35)`,
+                border: "none", cursor: "pointer",
+              }}
+            >
+              <Volume2 size={24} color="white" />
+            </motion.button>
+          </div>
+          <div className="flex gap-2 mt-4">
+            {["sh", "i", "p"].map((p, i) => (
+              <div key={i} style={{
+                padding: "4px 12px", borderRadius: 8,
+                background: i === 0 ? C.teal : C.white,
+                color: i === 0 ? "white" : C.muted,
+                fontSize: 14, fontWeight: 600, fontFamily: dyslexicFont
+              }}>
+                {p}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      {/* Lexi peek */}
+      <div className="px-6 pb-4">
+        <Card className="p-4 flex items-center gap-4" style={{ background: C.tealSoft }}>
+          <Echo size={60} pose="happy" />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>You're doing amazing! 🎉</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>7-day streak! Keep it going!</div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── Learn / Path Screen ──────────────────────────────────────────────────────
+const learnPath = [
+  { id: 1, label: "Short A", sub: "cat, bat, hat", done: true, boss: false, x: 60 },
+  { id: 2, label: "Short E", sub: "hen, bed, pet", done: true, boss: false, x: 240 },
+  { id: 3, label: "Short I", sub: "big, sit, lip", done: true, boss: false, x: 140 },
+  { id: 4, label: "Vowel Boss!", sub: "Master level", done: true, boss: true, x: 195 },
+  { id: 5, label: "SH Sound", sub: "ship, shell, fish", done: false, current: true, x: 80 },
+  { id: 6, label: "CH Sound", sub: "chip, chop, much", done: false, x: 250 },
+  { id: 7, label: "TH Sound", sub: "the, this, that", done: false, locked: true, x: 140 },
+  { id: 8, label: "Blend Boss!", sub: "Master level", done: false, boss: true, locked: true, x: 195 },
+  { id: 9, label: "Long A", sub: "cake, lake, tape", done: false, locked: true, x: 80 },
+  { id: 10, label: "Long E", sub: "feet, tree, bee", done: false, locked: true, x: 240 },
+];
+
+function LearnScreen({ onStartLesson }: { onStartLesson: () => void }) {
+  return (
+    <div className="flex flex-col h-full" style={{ fontFamily: uiFont, background: C.bg }}>
+      <div className="px-6 pt-14 pb-4">
+        <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Learning Path</div>
+        <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>Chapter 2: Blends & Digraphs</div>
+        <div className="flex gap-3 mt-4">
+          {[
+            { label: "4 done", color: C.teal },
+            { label: "Chapter 2", color: C.primary },
+            { label: "Level 3", color: C.amber },
+          ].map(b => (
+            <div key={b.label} style={{
+              padding: "6px 14px", borderRadius: 20,
+              background: b.color + "20", color: b.color, fontSize: 12, fontWeight: 600
+            }}>{b.label}</div>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 pb-8">
+        <div style={{ position: "relative", minHeight: learnPath.length * 88 + 80 }}>
+          {/* Path connector SVG */}
+          <svg
+            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+            viewBox={`0 0 390 ${learnPath.length * 88 + 80}`}
+            preserveAspectRatio="none"
+          >
+            {learnPath.slice(0, -1).map((node, i) => {
+              const next = learnPath[i + 1];
+              const y1 = 56 + i * 88;
+              const y2 = 56 + (i + 1) * 88;
+              const isDone = node.done && next.done;
+              return (
+                <line
+                  key={i}
+                  x1={node.x + 28}
+                  y1={y1}
+                  x2={next.x + 28}
+                  y2={y2}
+                  stroke={isDone ? C.teal : C.primarySoft}
+                  strokeWidth={4}
+                  strokeDasharray={next.locked ? "8 6" : "none"}
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          </svg>
+          {/* Nodes */}
+          {learnPath.map((node, i) => (
+            <motion.div
+              key={node.id}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: i * 0.05 }}
+              style={{
+                position: "absolute",
+                top: i * 88 + 12,
+                left: node.x,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <motion.button
+                whileTap={!node.locked ? { scale: 0.9 } : {}}
+                onClick={node.current ? onStartLesson : undefined}
+                style={{
+                  width: node.boss ? 72 : 56,
+                  height: node.boss ? 72 : 56,
+                  borderRadius: node.boss ? 36 : 28,
+                  background: node.done
+                    ? `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`
+                    : node.current
+                      ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`
+                      : node.locked
+                        ? "#E8E5F0"
+                        : C.primarySoft,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: node.current
+                    ? `0 8px 24px rgba(108,71,255,0.4)`
+                    : node.boss && node.done
+                      ? `0 6px 18px rgba(93,202,165,0.4)`
+                      : "none",
+                  border: node.current ? `3px solid white` : "none",
+                  cursor: node.locked ? "default" : "pointer",
+                }}
+              >
+                {node.locked
+                  ? <Lock size={20} color={C.muted} />
+                  : node.done
+                    ? node.boss ? <Trophy size={28} color="white" /> : <Check size={22} color="white" />
+                    : node.boss ? <Star size={28} color={C.primary} fill={C.yellow} />
+                      : <span style={{ fontSize: 22 }}>📖</span>}
+              </motion.button>
+              <div style={{
+                fontSize: 11, fontWeight: 700,
+                color: node.locked ? C.muted : node.current ? C.primary : C.ink,
+                textAlign: "center", maxWidth: 80
+              }}>{node.label}</div>
+              {node.current && (
+                <div style={{
+                  background: C.primary, color: "white", fontSize: 9, fontWeight: 700,
+                  padding: "2px 8px", borderRadius: 8
+                }}>NOW</div>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Lesson: Hear It ──────────────────────────────────────────────────────────
+function HearItStep({ onNext }: { onNext: () => void }) {
+  const [played, setPlayed] = useState(false);
+  const [pulsing, setPulsing] = useState(false);
+  const handlePlay = useCallback(() => {
+    setPulsing(true);
+    setPlayed(true);
+    speakLesson("sh", "ship");
+    setTimeout(() => setPulsing(false), 2200);
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(handlePlay, 450);
+    return () => { clearTimeout(t); window.speechSynthesis?.cancel(); };
+  }, [handlePlay]);
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-8 py-10" style={{ fontFamily: uiFont }}>
+      <div className="flex flex-col items-center gap-2">
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+          Step 1 of 5
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>Hear It</div>
+        <div style={{ fontSize: 15, color: C.muted, textAlign: "center" }}>
+          Listen carefully to the sound
+        </div>
+      </div>
+      <div className="flex flex-col items-center gap-6">
+        <motion.div animate={pulsing ? { scale: [1, 1.05, 1] } : {}} transition={{ duration: 0.4 }}>
+          <Echo size={120} pose={played ? "happy" : "idle"} />
+        </motion.div>
+        <div style={{
+          fontSize: 20, fontWeight: 600, color: C.muted, textAlign: "center",
+          background: C.tealSoft, padding: "12px 24px", borderRadius: 16
+        }}>
+          "Listen for the <span style={{ color: C.teal, fontWeight: 800 }}>SH</span> sound"
+        </div>
+        {/* Big play button */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {pulsing && [1, 2].map(ring => (
+            <motion.div
+              key={ring}
+              animate={{ scale: [1, 1.8], opacity: [0.5, 0] }}
+              transition={{ duration: 1, delay: ring * 0.2, repeat: Infinity }}
+              style={{
+                position: "absolute",
+                width: 100, height: 100, borderRadius: 50,
+                background: C.teal, opacity: 0.3
+              }}
+            />
+          ))}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handlePlay}
+            style={{
+              width: 100, height: 100, borderRadius: 50,
+              background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: `0 12px 32px rgba(93,202,165,0.45)`,
+              border: "4px solid white",
+            }}
+          >
+            <Volume2 size={40} color="white" />
+          </motion.button>
+        </div>
+        <div style={{ fontSize: 22, fontFamily: dyslexicFont, color: C.ink, letterSpacing: 2 }}>
+          <span style={{ color: C.teal, fontWeight: 700 }}>SH</span>ip
+        </div>
+        {played && (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{ fontSize: 14, color: C.teal, fontWeight: 600 }}
+          >
+            ✓ Great listening! Tap again to replay
+          </motion.div>
+        )}
+      </div>
+      <PrimaryBtn onClick={onNext} className="w-full text-lg" disabled={!played}>
+        I heard it! <ChevronRight size={20} />
+      </PrimaryBtn>
+    </div>
+  );
+}
+
+// ─── Lesson: See It ──────────────────────────────────────────────────────────
+function SeeItStep({ onNext }: { onNext: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-8 py-10" style={{ fontFamily: uiFont }}>
+      <div className="flex flex-col items-center gap-2">
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+          Step 2 of 5
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>See It</div>
+        <div style={{ fontSize: 15, color: C.muted, textAlign: "center" }}>
+          Find the special sound
+        </div>
+      </div>
+      <div className="flex flex-col items-center gap-6 w-full">
+        <Glow size={100} pose="idle" />
+        {/* Word display */}
+        <Card className="w-full p-6 flex flex-col items-center gap-4" style={{ background: C.primarySoft }}>
+          <div style={{ fontFamily: dyslexicFont, fontSize: 56, letterSpacing: 4, lineHeight: 1.3 }}>
+            <span style={{
+              color: C.teal, background: C.tealSoft,
+              borderRadius: 8, padding: "2px 4px"
+            }}>SH</span>
+            <span style={{ color: C.ink }}>ip</span>
+          </div>
+          <div className="flex gap-2">
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => speakPhoneme("sh")}
+              style={{
+                width: 44, height: 44, borderRadius: 22,
+                background: C.white, display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                border: "none", cursor: "pointer",
+              }}
+            >
+              <Volume2 size={20} color={C.primary} />
+            </motion.button>
+          </div>
+        </Card>
+        {/* Tip card */}
+        <Card className="w-full p-4 flex gap-3" style={{ background: C.amberSoft }}>
+          <div style={{ fontSize: 24 }}>💡</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Tip from Glow</div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, marginTop: 2 }}>
+              The letters <span style={{ color: C.teal, fontWeight: 700, fontFamily: dyslexicFont }}>SH</span> together
+              make one special sound — like saying "shhhh"!
+            </div>
+          </div>
+        </Card>
+        {/* Phoneme breakdown — tap each to hear its sound */}
+        <div className="flex flex-col items-center gap-2 w-full">
+          <div className="flex gap-3 w-full">
+            {[
+              { letters: "SH", label: "The blend", highlight: true },
+              { letters: "i", label: "Short I", highlight: false },
+              { letters: "p", label: "The stop", highlight: false },
+            ].map(p => (
+              <motion.button
+                key={p.letters}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => speakPhoneme(p.letters)}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 16, textAlign: "center",
+                  background: p.highlight ? C.teal : C.white,
+                  boxShadow: p.highlight ? `0 4px 12px rgba(93,202,165,0.3)` : "0 2px 8px rgba(0,0,0,0.06)",
+                  border: "none", cursor: "pointer",
+                }}
+              >
+                <div style={{ fontFamily: dyslexicFont, fontSize: 22, color: p.highlight ? "white" : C.ink, fontWeight: 700 }}>
+                  {p.letters}
+                </div>
+                <div style={{ fontSize: 10, color: p.highlight ? "rgba(255,255,255,0.8)" : C.muted, marginTop: 2 }}>
+                  {p.label}
+                </div>
+              </motion.button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+            <Volume2 size={12} color={C.muted} /> Tap each sound to hear it
+          </div>
+        </div>
+      </div>
+      <PrimaryBtn onClick={onNext} className="w-full text-lg">
+        Got it! <ChevronRight size={20} />
+      </PrimaryBtn>
+    </div>
+  );
+}
+
+// ─── Lesson: Trace It ────────────────────────────────────────────────────────
+// SH stroke paths in a 360×240 viewBox. Four strokes: S body, H-left, H-right, H-crossbar.
+// Designed for whole-arm motion on touch — letters fill the canvas.
+const SH_STROKES = [
+  // S: written in one stroke top→bottom. Quadratic curves give a clean letterform.
+  //   Start top-right (150,70) → top hook bulges upper-left to mid-left → crosses
+  //   right through mid → bottom hook bulges lower-right → ends bottom-left.
+  "M 150 70 Q 60 60 60 105 Q 60 135 105 135 Q 150 135 150 165 Q 150 200 60 195",
+  // H left vertical (top → bottom)
+  "M 210 60 L 210 200",
+  // H right vertical (top → bottom)
+  "M 300 60 L 300 200",
+  // H crossbar (left → right)
+  "M 210 130 L 300 130",
+];
+
+function TraceItStep({ onNext }: { onNext: () => void }) {
+  const [attempts, setAttempts] = useState(0);
+  const [encourage, setEncourage] = useState<string | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+  const [complete, setComplete] = useState(false);
+
+  // TODO(FishAudio): when API key lands, start/stop a looped "shhhh" phoneme
+  //   audio sample on finger down / finger up. The hooks below are wired but
+  //   intentionally silent for now. See PLAN.md for the audio contract.
+  const handleFingerDown = useCallback(() => { /* TODO: start phoneme loop */ }, []);
+  const handleFingerUp = useCallback(() => { /* TODO: stop phoneme loop */ }, []);
+
+  const handleComplete = useCallback(() => {
+    setComplete(true);
+    setEncourage(null);
+    // Brief celebration then advance
+    setTimeout(onNext, 1400);
+  }, [onNext]);
+
+  const handlePartialLift = useCallback((coverage: number) => {
+    const nextAttempts = attempts + 1;
+    setAttempts(nextAttempts);
+    // After 2 partial lifts, auto-pass with celebration — never get stuck.
+    if (nextAttempts >= 2) {
+      setEncourage(`Great effort! ✨ Let's keep going.`);
+      setTimeout(handleComplete, 900);
+      return;
+    }
+    const pct = Math.round(coverage * 100);
+    setEncourage(pct > 30
+      ? `Nice start — let's finish the line together!`
+      : `You've got this — slide your finger along the path.`);
+    setTimeout(() => {
+      setEncourage(null);
+      setResetKey(k => k + 1);
+    }, 1100);
+  }, [attempts, handleComplete]);
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-8 py-10" style={{ fontFamily: uiFont }}>
+      <div className="flex flex-col items-center gap-2">
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+          Step 3 of 5
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>Trace It</div>
+        <div style={{ fontSize: 15, color: C.muted, textAlign: "center" }}>
+          Use your finger to draw the letters
+        </div>
+      </div>
+      <div className="flex flex-col items-center gap-4 w-full">
+        <Glow size={80} pose={complete ? "celebrating" : "idle"} />
+        <Card className="w-full p-3" style={{ background: C.white }}>
+          <TraceLetter
+            strokes={SH_STROKES}
+            viewBox="0 0 360 240"
+            tolerance={32}
+            threshold={0.5}
+            samplesPerStroke={32}
+            onComplete={handleComplete}
+            onPartialLift={handlePartialLift}
+            onFingerDown={handleFingerDown}
+            onFingerUp={handleFingerUp}
+            resetKey={resetKey}
+            showDemo={attempts === 0}
+          />
+        </Card>
+        {encourage && (
+          <motion.div
+            initial={{ y: 8, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            style={{
+              background: C.amberSoft,
+              color: C.amber,
+              padding: "8px 16px",
+              borderRadius: 14,
+              fontSize: 13,
+              fontWeight: 700,
+              textAlign: "center",
+            }}
+          >
+            {encourage}
+          </motion.div>
+        )}
+        {complete && (
+          <motion.div
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{ fontSize: 18, fontWeight: 700, color: C.teal }}
+          >
+            ✦ Beautiful tracing! ✦
+          </motion.div>
+        )}
+        <div style={{ fontSize: 11, color: C.muted }}>
+          Tip: Use your finger, not a stylus — your finger learns letters faster.
+        </div>
+      </div>
+      <GhostBtn onClick={onNext} className="w-full">
+        Skip for now
+      </GhostBtn>
+    </div>
+  );
+}
+
+// ─── Lesson: Say It ──────────────────────────────────────────────────────────
+const TARGET_WORD_SAY = "ship";
+const TARGET_ACCEPT = /\b(ship|sheep|shape|shift|chip)\b/i;
+
+function SayItStep({ onNext }: { onNext: () => void }) {
+  const [micState, setMicState] = useState<MicState>("idle");
+  const [denied, setDenied] = useState(false);
+  const [matched, setMatched] = useState(false);
+  const [heard, setHeard] = useState<string>("");
+  const [levels, setLevels] = useState<number[]>(() => new Array(10).fill(8));
+  const streamRef = useRef<MediaStream | null>(null);
+  const ctxRef = useRef<AudioContext | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const recogRef = useRef<any>(null);
+  const matchedRef = useRef(false);
+
+  const stopMic = useCallback(() => {
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    ctxRef.current?.close().catch(() => {});
+    ctxRef.current = null;
+    try { recogRef.current?.stop(); } catch {}
+    recogRef.current = null;
+  }, []);
+
+  useEffect(() => stopMic, [stopMic]);
+
+  const handleMic = useCallback(async () => {
+    if (micState !== "idle") return;
+    setMatched(false);
+    setHeard("");
+    matchedRef.current = false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx: AudioContext = new Ctx();
+      ctxRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      // Speech recognition for real word matching
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SR) {
+        const r = new SR();
+        r.lang = "en-US";
+        r.interimResults = true;
+        r.continuous = true;
+        r.maxAlternatives = 5;
+        r.onresult = (ev: any) => {
+          let text = "";
+          for (let i = 0; i < ev.results.length; i++) {
+            for (let j = 0; j < ev.results[i].length; j++) {
+              text += " " + ev.results[i][j].transcript;
+            }
+          }
+          setHeard(text.trim());
+          if (TARGET_ACCEPT.test(text)) {
+            matchedRef.current = true;
+            setMatched(true);
+          }
+        };
+        r.onerror = () => {};
+        recogRef.current = r;
+        try { r.start(); } catch {}
+      }
+
+      setMicState("listening");
+      const started = performance.now();
+      const tick = () => {
+        analyser.getByteFrequencyData(data);
+        const bins = 10;
+        const step = Math.floor(data.length / bins);
+        const next: number[] = [];
+        for (let i = 0; i < bins; i++) {
+          let sum = 0;
+          for (let j = 0; j < step; j++) sum += data[i * step + j];
+          const avg = sum / step;
+          next.push(6 + (avg / 255) * 28);
+        }
+        setLevels(next);
+        const elapsed = performance.now() - started;
+        // Stop early on confident match
+        if (matchedRef.current && elapsed > 800) {
+          stopMic();
+          setMicState("processing");
+          setTimeout(() => setMicState("encourage"), 600);
+          return;
+        }
+        if (elapsed < 3500) {
+          rafRef.current = requestAnimationFrame(tick);
+        } else {
+          stopMic();
+          setMicState("processing");
+          setTimeout(() => setMicState("encourage"), 700);
+        }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } catch {
+      setDenied(true);
+      setMicState("encourage");
+    }
+  }, [micState, stopMic]);
+
+  const tryAgain = () => {
+    setMicState("idle");
+    setMatched(false);
+    setHeard("");
+    matchedRef.current = false;
+    setLevels(new Array(10).fill(8));
+  };
+  const srSupported = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+  const micBg = micState === "idle"
+    ? `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`
+    : micState === "listening"
+      ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`
+      : micState === "processing"
+        ? `linear-gradient(135deg, ${C.amber}, #E8922A)`
+        : `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`;
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-8 py-10" style={{ fontFamily: uiFont }}>
+      <div className="flex flex-col items-center gap-2">
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+          Step 4 of 5
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>Say It</div>
+        <div style={{ fontSize: 15, color: C.muted, textAlign: "center" }}>
+          {micState === "idle" ? "Your turn to say it!" : micState === "listening" ? "Listening… 🎵" : micState === "processing" ? "Processing your voice…" : "Nice try! Keep going!"}
+        </div>
+      </div>
+      <div className="flex flex-col items-center gap-6 w-full">
+        <motion.div animate={micState === "encourage" ? { scale: [1, 1.08, 1] } : {}}>
+          <Bubble size={110} pose={micState === "encourage" ? "happy" : "idle"} />
+        </motion.div>
+        {/* Word to say */}
+        <div style={{ fontFamily: dyslexicFont, fontSize: 48, color: C.ink, letterSpacing: 3 }}>
+          <span style={{ color: C.teal }}>SH</span>ip
+        </div>
+        {/* Mic button with waveform */}
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+          {/* Waveform rings */}
+          {micState === "listening" && [1, 2, 3].map(ring => (
+            <motion.div
+              key={ring}
+              animate={{ scale: [1, 1.5 + ring * 0.3], opacity: [0.4, 0] }}
+              transition={{ duration: 0.9, delay: ring * 0.15, repeat: Infinity }}
+              style={{
+                position: "absolute",
+                width: 90, height: 90, borderRadius: 45,
+                background: C.primary, opacity: 0.2,
+              }}
+            />
+          ))}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handleMic}
+            style={{
+              width: 90, height: 90, borderRadius: 45,
+              background: micBg,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: micState === "listening"
+                ? `0 0 0 6px rgba(108,71,255,0.2), 0 12px 32px rgba(108,71,255,0.4)`
+                : `0 12px 32px rgba(93,202,165,0.4)`,
+              border: "4px solid white",
+              cursor: micState === "idle" ? "pointer" : "default",
+            }}
+          >
+            {micState === "processing"
+              ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+                  <RefreshCw size={36} color="white" />
+                </motion.div>
+              : <Mic size={40} color="white" />}
+          </motion.button>
+          {/* Live waveform bars driven by mic */}
+          {micState === "listening" && (
+            <div className="flex items-end gap-1 h-10">
+              {levels.map((h, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: 5,
+                    height: h,
+                    background: C.primary,
+                    borderRadius: 2,
+                    transition: "height 60ms linear",
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Feedback */}
+        {micState === "encourage" && (() => {
+          const bg = denied ? C.amberSoft : matched ? C.tealSoft : C.amberSoft;
+          const accent = denied ? C.amber : matched ? C.teal : C.amber;
+          const title = denied ? "No worries!" : matched ? "Perfect! 🌟" : "Almost!";
+          const sub = denied
+            ? "We need mic access to hear you. Tap Continue when you're ready."
+            : matched
+              ? `Bubble heard you say "${TARGET_WORD_SAY}"!`
+              : srSupported
+                ? `Let's try that sound again — say "${TARGET_WORD_SAY}".`
+                : "Bubble heard you! Keep practicing.";
+          return (
+            <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+              <Card className="w-full p-4" style={{ background: bg, textAlign: "center" }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: accent }}>{title}</div>
+                <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{sub}</div>
+                {heard && !matched && !denied && (
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 6, fontStyle: "italic" }}>
+                    I heard: "{heard}"
+                  </div>
+                )}
+              </Card>
+            </motion.div>
+          );
+        })()}
+      </div>
+      <div className="flex flex-col gap-3 w-full">
+        {micState === "encourage" && (
+          <GhostBtn onClick={tryAgain} className="w-full">
+            <RefreshCw size={18} /> Try Again
+          </GhostBtn>
+        )}
+        <PrimaryBtn
+          onClick={onNext}
+          className="w-full text-lg"
+          disabled={micState === "idle"}
+        >
+          {micState === "encourage" ? "Continue Anyway" : "Continue"} <ChevronRight size={20} />
+        </PrimaryBtn>
+      </div>
+    </div>
+  );
+}
+
+// ─── Lesson: Build It ────────────────────────────────────────────────────────
+const TARGET_WORD = "SHIP";
+const TILE_OPTIONS = ["SH", "I", "P", "T", "R", "CH"];
+
+function DragTile({ idx, letter, used, disabled }: { idx: number; letter: string; used: boolean; disabled: boolean }) {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: DND_TYPE,
+    item: { idx, letter },
+    canDrag: () => !used && !disabled,
+    collect: m => ({ isDragging: !!m.isDragging() }),
+  }), [idx, letter, used, disabled]);
+  return (
+    <motion.div
+      ref={drag as any}
+      whileTap={!used && !disabled ? { scale: 0.92 } : {}}
+      style={{
+        padding: "12px 20px", borderRadius: 16,
+        background: used ? C.primarySoft : C.white,
+        boxShadow: used ? "none" : "0 4px 12px rgba(108,71,255,0.14)",
+        fontSize: 22, fontFamily: dyslexicFont, fontWeight: 700,
+        color: used ? C.muted : C.primary,
+        opacity: used ? 0.5 : isDragging ? 0.4 : 1,
+        border: `2px solid ${used ? "transparent" : C.primarySoft}`,
+        cursor: used || disabled ? "default" : "grab",
+        touchAction: "none",
+        userSelect: "none",
+        transition: "all 0.2s",
+      }}
+    >
+      {letter}
+    </motion.div>
+  );
+}
+
+function DropSlot({
+  filledLetter, expected, isCorrect, shake, onDropTile, onClear,
+}: {
+  filledLetter: string | null;
+  expected: string;
+  isCorrect: boolean;
+  shake: boolean;
+  onDropTile: (item: { idx: number; letter: string }) => boolean;
+  onClear: () => void;
+}) {
+  const [{ isOver, canDrop }, drop] = useDrop(() => ({
+    accept: DND_TYPE,
+    canDrop: (item: { letter: string }) => !filledLetter && item.letter === expected,
+    drop: (item: { idx: number; letter: string }) => { onDropTile(item); },
+    collect: m => ({ isOver: !!m.isOver(), canDrop: !!m.canDrop() }),
+  }), [filledLetter, expected, onDropTile]);
+  const ringColor = isCorrect ? C.teal : filledLetter ? C.primary : isOver && canDrop ? C.teal : C.primarySoft;
+  const bg = isCorrect ? C.tealSoft : filledLetter ? C.primarySoft : isOver && canDrop ? C.tealSoft : "transparent";
+  return (
+    <motion.button
+      ref={drop as any}
+      animate={shake && !filledLetter ? { x: [-6, 6, -6, 6, 0] } : isOver && !canDrop ? { x: [-3, 3, -3, 3, 0] } : {}}
+      transition={{ duration: 0.35 }}
+      whileTap={filledLetter && !isCorrect ? { scale: 0.92 } : {}}
+      onClick={() => filledLetter && !isCorrect && onClear()}
+      style={{
+        width: 80, height: 68, borderRadius: 18,
+        border: `3px dashed ${ringColor}`,
+        background: bg,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 24, fontFamily: dyslexicFont, fontWeight: 700,
+        color: isCorrect ? C.teal : C.primary,
+        boxShadow: isCorrect && filledLetter ? `0 4px 16px rgba(93,202,165,0.4)` : "none",
+        cursor: filledLetter && !isCorrect ? "pointer" : "default",
+        position: "relative",
+        transition: "border-color 0.2s, background 0.2s",
+      }}
+    >
+      {filledLetter}
+      {isCorrect && filledLetter && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          style={{
+            position: "absolute", top: -8, right: -8,
+            width: 20, height: 20, borderRadius: 10,
+            background: C.teal, display: "flex", alignItems: "center", justifyContent: "center"
+          }}
+        >
+          <Check size={12} color="white" />
+        </motion.div>
+      )}
+    </motion.button>
+  );
+}
+
+function BuildItStep({ onNext }: { onNext: () => void }) {
+  const slots = useMemo(() => ["SH", "I", "P"], []);
+  const [filled, setFilled] = useState<(null | { tileIdx: number; letter: string })[]>([null, null, null]);
+  const [shake, setShake] = useState(false);
+  const isCorrect = filled.every(f => f !== null);
+  useEffect(() => {
+    if (isCorrect) {
+      const t = setTimeout(onNext, 1800);
+      return () => clearTimeout(t);
+    }
+  }, [isCorrect, onNext]);
+  const usedIdxs = new Set(filled.filter(Boolean).map(f => f!.tileIdx));
+  const dropAt = (slotIdx: number, item: { idx: number; letter: string }) => {
+    if (filled[slotIdx]) return false;
+    if (item.letter !== slots[slotIdx]) {
+      setShake(true);
+      setTimeout(() => setShake(false), 400);
+      return false;
+    }
+    setFilled(prev => {
+      const next = [...prev];
+      next[slotIdx] = { tileIdx: item.idx, letter: item.letter };
+      return next;
+    });
+    return true;
+  };
+  const clearSlot = (slotIdx: number) => {
+    setFilled(prev => { const n = [...prev]; n[slotIdx] = null; return n; });
+  };
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-8 py-10" style={{ fontFamily: uiFont }}>
+      <div className="flex flex-col items-center gap-2">
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+          Step 5 of 5
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>Build It</div>
+        <div style={{ fontSize: 15, color: C.muted, textAlign: "center" }}>
+          Put the sounds in the right order!
+        </div>
+      </div>
+      <div className="flex flex-col items-center gap-8 w-full">
+        <Brick size={100} pose={isCorrect ? "celebrating" : "idle"} />
+        {/* Word image hint */}
+        <div style={{ fontSize: 32, textAlign: "center" }}>⛵ ship</div>
+        {/* Slots */}
+        <div className="flex gap-4 justify-center">
+          {slots.map((expected, i) => (
+            <DropSlot
+              key={i}
+              expected={expected}
+              filledLetter={filled[i]?.letter ?? null}
+              isCorrect={isCorrect}
+              shake={shake}
+              onDropTile={(item) => dropAt(i, item)}
+              onClear={() => clearSlot(i)}
+            />
+          ))}
+        </div>
+        {isCorrect && (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{ fontSize: 22, fontWeight: 700, color: C.teal, textAlign: "center" }}
+          >
+            ✦ Perfect! You built it! ✦
+          </motion.div>
+        )}
+        {/* Tile bank (draggable) */}
+        <div className="flex flex-wrap justify-center gap-3">
+          {TILE_OPTIONS.map((letter, i) => (
+            <DragTile
+              key={i}
+              idx={i}
+              letter={letter}
+              used={usedIdxs.has(i)}
+              disabled={isCorrect}
+            />
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, marginTop: -4 }}>
+          Drag a sound into the matching box
+        </div>
+      </div>
+      <div style={{ height: 56 }} />
+    </div>
+  );
+}
+
+// ─── Win Screen ───────────────────────────────────────────────────────────────
+function WinScreen({ onDone, variant = "small" }: { onDone: () => void; variant?: WinVariant }) {
+  const [showXP, setShowXP] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setShowXP(true), 400); return () => clearTimeout(t); }, []);
+  const confettiColors = [C.primary, C.teal, C.amber, C.blush, C.yellow, C.sky, C.lexi];
+  const confettiItems = Array.from({ length: 28 }, (_, i) => ({
+    color: confettiColors[i % confettiColors.length],
+    x: Math.random() * 360 + 15,
+    delay: Math.random() * 0.5,
+    size: Math.random() * 10 + 6,
+    rotate: Math.random() * 360,
+  }));
+  const variantData = {
+    small: { title: "Awesome!", sub: "You completed the lesson!", xp: 15 },
+    streak: { title: "7-Day Streak!", sub: "You're on fire! Amazing dedication!", xp: 30 },
+    level: { title: "Level Up!", sub: "You've mastered SH sounds!", xp: 50 },
+  };
+  const { title, sub, xp } = variantData[variant];
+  return (
+    <div
+      className="flex flex-col items-center justify-between h-full px-8 py-12"
+      style={{
+        fontFamily: uiFont,
+        background: `linear-gradient(160deg, ${C.primarySoft} 0%, ${C.bg} 50%, ${C.tealSoft} 100%)`,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Confetti */}
+      {confettiItems.map((c, i) => (
+        <motion.div
+          key={i}
+          initial={{ y: -20, opacity: 0, rotate: 0 }}
+          animate={{ y: 900, opacity: [0, 1, 1, 0], rotate: c.rotate + 360 }}
+          transition={{ duration: 2.5 + Math.random(), delay: c.delay, ease: "linear" }}
+          style={{
+            position: "absolute",
+            top: 0, left: c.x,
+            width: c.size, height: c.size * 0.5,
+            borderRadius: 2,
+            background: c.color,
+          }}
+        />
+      ))}
+      <XPBurst xp={xp} show={showXP} />
+      <div />
+      <div className="flex flex-col items-center gap-6 z-10">
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], rotate: [-3, 3, -3, 0] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <Lexi size={140} pose="celebrating" />
+        </motion.div>
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.3, type: "spring", bounce: 0.5 }}
+          className="flex flex-col items-center gap-3 text-center"
+        >
+          <div style={{ fontSize: 40, fontWeight: 800, color: C.primary }}>{title}</div>
+          <div style={{ fontSize: 16, color: C.muted }}>{sub}</div>
+        </motion.div>
+        {/* Stats row */}
+        <div className="flex gap-4">
+          {[
+            { icon: <Zap size={20} color={C.yellow} />, value: `+${xp} XP`, color: C.yellow },
+            { icon: <StreakFlame days={7} size={22} />, value: "7 days", color: C.amber },
+            { icon: <Star size={20} color={C.primary} fill={C.primary} />, value: "3 stars", color: C.primary },
+          ].map(s => (
+            <Card key={s.value} className="flex-1 p-3 flex flex-col items-center gap-1" style={{ background: "rgba(255,255,255,0.85)" }}>
+              {s.icon}
+              <div style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.value}</div>
+            </Card>
+          ))}
+        </div>
+        {/* Phoneme mastered chip */}
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.8, type: "spring" }}
+          style={{
+            background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+            borderRadius: 24, padding: "8px 20px",
+            display: "flex", alignItems: "center", gap: 8,
+          }}
+        >
+          <Check size={16} color="white" />
+          <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>SH Sound — Mastered!</span>
+        </motion.div>
+      </div>
+      <PrimaryBtn onClick={onDone} className="w-full text-xl z-10">
+        Keep Going! <ArrowRight size={22} />
+      </PrimaryBtn>
+    </div>
+  );
+}
+
+// ─── Lesson Player Shell ──────────────────────────────────────────────────────
+function LessonScreen({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState<LessonStep>("hear");
+  const steps: LessonStep[] = ["hear", "see", "trace", "say", "build", "win"];
+  const stepIdx = steps.indexOf(step);
+  const next = () => {
+    const nextStep = steps[stepIdx + 1];
+    if (nextStep) setStep(nextStep);
+  };
+  const stepColors: Record<LessonStep, string> = {
+    hear: C.teal, see: C.primary, trace: C.glow, say: C.blush, build: C.amber, win: C.yellow
+  };
+  return (
+    <div className="flex flex-col h-full" style={{ background: C.bg }}>
+      {/* Progress header */}
+      {step !== "win" && (
+        <div className="flex items-center gap-3 px-5 pt-12 pb-4">
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={onDone}
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              background: C.primarySoft, display: "flex", alignItems: "center", justifyContent: "center"
+            }}
+          >
+            <ChevronLeft size={22} color={C.primary} />
+          </motion.button>
+          <div className="flex-1 flex gap-2">
+            {steps.slice(0, -1).map((s, i) => (
+              <div
+                key={s}
+                style={{
+                  flex: 1, height: 6, borderRadius: 3,
+                  background: i < stepIdx ? stepColors[s] : i === stepIdx ? stepColors[s] : C.primarySoft,
+                  opacity: i < stepIdx ? 1 : i === stepIdx ? 1 : 0.4,
+                  transition: "all 0.3s",
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: C.muted, fontFamily: uiFont, fontWeight: 600 }}>
+            {stepIdx + 1}/5
+          </div>
+        </div>
+      )}
+      <div className="flex-1 overflow-hidden">
+        {step === "hear" && <HearItStep onNext={next} />}
+        {step === "see" && <SeeItStep onNext={next} />}
+        {step === "trace" && <TraceItStep onNext={next} />}
+        {step === "say" && <SayItStep onNext={next} />}
+        {step === "build" && (
+          <DndProvider backend={DndBackend} options={isTouch ? { enableMouseEvents: true } : undefined}>
+            <BuildItStep onNext={next} />
+          </DndProvider>
+        )}
+        {step === "win" && <WinScreen onDone={onDone} variant="small" />}
+      </div>
+    </div>
+  );
+}
+
+// ─── Progress Screen ──────────────────────────────────────────────────────────
+const weekData = [
+  { day: "Mon", xp: 45 },
+  { day: "Tue", xp: 80 },
+  { day: "Wed", xp: 60 },
+  { day: "Thu", xp: 95 },
+  { day: "Fri", xp: 40 },
+  { day: "Sat", xp: 110 },
+  { day: "Sun", xp: 70 },
+];
+const masteredWords = ["ship", "chat", "thin", "shop", "chin", "them", "shed", "chip", "that", "shell", "chop", "thick"];
+
+function ProgressScreen() {
+  const maxXP = Math.max(...weekData.map(d => d.xp));
+  return (
+    <div className="flex flex-col h-full overflow-y-auto" style={{ fontFamily: uiFont, background: C.bg }}>
+      <div className="px-6 pt-14 pb-4">
+        <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Your Progress</div>
+        <div style={{ fontSize: 14, color: C.muted }}>This week</div>
+      </div>
+      {/* Summary row */}
+      <div className="px-6 flex gap-3 pb-5">
+        {[
+          { label: "Words", value: "12", icon: "📖", color: C.primary },
+          { label: "Minutes", value: "38", icon: "⏱", color: C.teal },
+          { label: "Accuracy", value: "91%", icon: "🎯", color: C.amber },
+        ].map(s => (
+          <Card key={s.label} className="flex-1 p-3 flex flex-col items-center gap-1">
+            <div style={{ fontSize: 22 }}>{s.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: 10, color: C.muted }}>{s.label}</div>
+          </Card>
+        ))}
+      </div>
+      {/* XP Bar chart */}
+      <div className="px-6 pb-5">
+        <Card className="p-5">
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.ink, marginBottom: 16 }}>XP This Week</div>
+          <div className="flex items-end gap-2" style={{ height: 100 }}>
+            {weekData.map(d => (
+              <div key={d.day} className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
+                <motion.div
+                  initial={{ height: 0 }}
+                  animate={{ height: (d.xp / maxXP) * 80 }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  style={{
+                    borderRadius: "6px 6px 3px 3px",
+                    background: d.day === "Sat"
+                      ? `linear-gradient(180deg, ${C.amber}, #E8922A)`
+                      : `linear-gradient(180deg, ${C.primary}, ${C.primaryDark})`,
+                    width: "100%",
+                    minHeight: 4,
+                  }}
+                />
+                <div style={{ fontSize: 10, color: C.muted }}>{d.day}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      {/* Accuracy ring */}
+      <div className="px-6 pb-5">
+        <Card className="p-5 flex items-center gap-5">
+          <div style={{ position: "relative" }}>
+            <ProgressRing pct={91} size={80} stroke={8} color={C.teal} bg={C.tealSoft} />
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center"
+            }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.teal }}>91%</div>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>Accuracy</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>
+              You got 91 out of 100 sounds right this week!
+            </div>
+            <div style={{
+              marginTop: 8, padding: "4px 12px", borderRadius: 10,
+              background: C.tealSoft, color: C.teal, fontSize: 11, fontWeight: 700,
+              display: "inline-block"
+            }}>
+              ↑ 4% from last week
+            </div>
+          </div>
+        </Card>
+      </div>
+      {/* Words mastered */}
+      <div className="px-6 pb-6">
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.ink, marginBottom: 12 }}>
+          Words Mastered
+          <span style={{
+            marginLeft: 10, fontSize: 12, background: C.primary,
+            color: "white", borderRadius: 10, padding: "2px 10px"
+          }}>{masteredWords.length}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {masteredWords.map((w, i) => (
+            <motion.div
+              key={w}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: i * 0.05 }}
+              style={{
+                padding: "6px 14px", borderRadius: 20,
+                background: i < 4 ? C.tealSoft : i < 8 ? C.primarySoft : C.amberSoft,
+                color: i < 4 ? C.teal : i < 8 ? C.primary : C.amber,
+                fontSize: 14, fontWeight: 600, fontFamily: dyslexicFont,
+              }}
+            >
+              {w}
+            </motion.div>
+          ))}
+        </div>
+      </div>
+      {/* Mascot peek */}
+      <div className="px-6 pb-8" style={{ position: "relative" }}>
+        <div style={{ position: "absolute", right: 16, bottom: 80, zIndex: 0 }}>
+          <Lexi size={80} pose="happy" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Rewards Screen ───────────────────────────────────────────────────────────
+const badges = [
+  { id: 1, emoji: "🌟", label: "First Steps", unlocked: true, color: C.yellow },
+  { id: 2, emoji: "🔥", label: "7-Day Streak", unlocked: true, color: C.amber },
+  { id: 3, emoji: "🔊", label: "Sound Explorer", unlocked: true, color: C.teal },
+  { id: 4, emoji: "🏗", label: "Word Builder", unlocked: true, color: C.primary },
+  { id: 5, emoji: "🧩", label: "Phoneme Master", unlocked: false, color: C.muted },
+  { id: 6, emoji: "📚", label: "Bookworm", unlocked: false, color: C.muted },
+  { id: 7, emoji: "⚡", label: "Speed Reader", unlocked: false, color: C.muted },
+  { id: 8, emoji: "💎", label: "Diamond Reader", unlocked: false, color: C.muted },
+  { id: 9, emoji: "🦋", label: "Transformation", unlocked: false, color: C.muted },
+];
+const shopItems = [
+  { id: 1, name: "Starry Hat", emoji: "⭐", unlocked: true, price: 0, mascot: "Lexi" },
+  { id: 2, name: "Rainbow Cape", emoji: "🌈", unlocked: false, price: 200, mascot: "Echo" },
+  { id: 3, name: "Cozy Scarf", emoji: "🧣", unlocked: false, price: 150, mascot: "Glow" },
+  { id: 4, name: "Space Helmet", emoji: "🚀", unlocked: false, price: 300, mascot: "Bubble" },
+  { id: 5, name: "Magic Boots", emoji: "✨", unlocked: false, price: 250, mascot: "Brick" },
+  { id: 6, name: "Crown", emoji: "👑", unlocked: false, price: 500, mascot: "Lexi" },
+];
+
+function RewardsScreen() {
+  const [tab, setTab] = useState<"badges" | "shop">("badges");
+  return (
+    <div className="flex flex-col h-full overflow-y-auto" style={{ fontFamily: uiFont, background: C.bg }}>
+      <div className="px-6 pt-14 pb-4">
+        <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Rewards</div>
+      </div>
+      {/* XP balance */}
+      <div className="px-6 pb-5">
+        <Card className="p-5" style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", fontWeight: 500 }}>Total XP Balance</div>
+              <div style={{ fontSize: 44, fontWeight: 800, color: "white", lineHeight: 1.1 }}>2,340</div>
+            </div>
+            <div>
+              <div style={{ width: 70, height: 70, borderRadius: 35, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Zap size={36} color={C.yellow} />
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-4 mt-4">
+            {[
+              { label: "This Week", value: "+450 XP" },
+              { label: "Streak Bonus", value: "+90 XP" },
+            ].map(s => (
+              <div key={s.label} style={{ padding: "6px 14px", borderRadius: 10, background: "rgba(255,255,255,0.15)" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>{s.label}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      {/* Tab switcher */}
+      <div className="px-6 pb-4 flex gap-3">
+        {(["badges", "shop"] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              flex: 1, padding: "12px 0", borderRadius: 16,
+              background: tab === t ? C.primary : C.primarySoft,
+              color: tab === t ? "white" : C.primary,
+              fontFamily: uiFont, fontWeight: 700, fontSize: 15,
+              border: "none", cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            {t === "badges" ? "🏅 Badges" : "🛍 Items"}
+          </button>
+        ))}
+      </div>
+      {tab === "badges" && (
+        <div className="px-6 pb-8 grid grid-cols-3 gap-3">
+          {badges.map((b, i) => (
+            <motion.div
+              key={b.id}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: i * 0.06 }}
+            >
+              <Card className="p-3 flex flex-col items-center gap-2" style={{
+                opacity: b.unlocked ? 1 : 0.5,
+                filter: b.unlocked ? "none" : "grayscale(1)",
+              }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: 26,
+                  background: b.unlocked ? b.color + "20" : "#F0EFF5",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 28,
+                }}>
+                  {b.unlocked ? b.emoji : "🔒"}
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: b.unlocked ? C.ink : C.muted, textAlign: "center" }}>
+                  {b.label}
+                </div>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
+      {tab === "shop" && (
+        <div className="px-6 pb-8 grid grid-cols-2 gap-3">
+          {shopItems.map((item, i) => (
+            <motion.div
+              key={item.id}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: i * 0.08 }}
+            >
+              <Card className="p-4 flex flex-col items-center gap-2">
+                <div style={{ fontSize: 40 }}>{item.emoji}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, textAlign: "center" }}>{item.name}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>for {item.mascot}</div>
+                {item.unlocked
+                  ? <div style={{ padding: "4px 12px", borderRadius: 10, background: C.tealSoft, color: C.teal, fontSize: 12, fontWeight: 700 }}>✓ Owned</div>
+                  : <div style={{ padding: "4px 12px", borderRadius: 10, background: C.primarySoft, color: C.primary, fontSize: 12, fontWeight: 700 }}>{item.price} XP</div>
+                }
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Profile Screen ───────────────────────────────────────────────────────────
+const bgTints = [
+  { label: "Cream", value: "#FFFDF5" },
+  { label: "Mint", value: "#F0FBF6" },
+  { label: "Sky", value: "#EFF6FD" },
+  { label: "Lavender", value: "#F5F0FF" },
+  { label: "Peach", value: "#FFF3EE" },
+  { label: "Rose", value: "#FFF0F4" },
+];
+
+function ProfileScreen() {
+  const name = useStore(s => s.name) || "Friend";
+  const textSize = useStore(s => s.textSize);
+  const selectedBg = useStore(s => s.bgTint);
+  const selectedMascot = useStore(s => s.activeMascot);
+  const xp = useStore(s => s.xp);
+  const streak = useStore(s => s.streak);
+  const lessonsCompleted = useStore(s => s.lessonsCompleted);
+  const masteredCount = useStore(s => s.masteredPhonemes.length);
+  const setStore = useStore(s => s.set);
+  const setTextSize = (v: "small" | "medium" | "large") => setStore({ textSize: v });
+  const setSelectedBg = (v: number) => setStore({ bgTint: v });
+  const setSelectedMascot = (v: number) => setStore({ activeMascot: v });
+  const mascots = [Lexi, Echo, Glow, Bubble, Brick];
+  const MascotComp = mascots[selectedMascot];
+  return (
+    <div className="flex flex-col h-full overflow-y-auto" style={{ fontFamily: uiFont, background: C.bg }}>
+      <div className="px-6 pt-14 pb-2">
+        <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Profile</div>
+      </div>
+      {/* Avatar & stats */}
+      <div className="px-6 pb-5">
+        <Card className="p-5" style={{ background: `linear-gradient(135deg, ${C.primarySoft}, #F8F5FF)` }}>
+          <div className="flex items-center gap-4">
+            <div style={{
+              width: 76, height: 76, borderRadius: 38,
+              background: C.white, display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: `0 4px 16px rgba(108,71,255,0.2)`,
+              overflow: "hidden",
+            }}>
+              <MascotComp size={66} pose="happy" />
+            </div>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.ink }}>{name}</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Level {Math.max(1, Math.floor(xp / 500))} · Sound Explorer</div>
+              <div className="flex gap-2 mt-2">
+                <div style={{ padding: "4px 10px", borderRadius: 8, background: C.primary, color: "white", fontSize: 11, fontWeight: 700 }}>
+                  {xp.toLocaleString()} XP
+                </div>
+                <div style={{ padding: "4px 10px", borderRadius: 8, background: C.amberSoft, color: C.amber, fontSize: 11, fontWeight: 700 }}>
+                  🔥 {streak} days
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Stats row */}
+          <div className="flex gap-3 mt-4">
+            {[
+              { label: "Words", v: masteredCount * 4 },
+              { label: "Lessons", v: lessonsCompleted },
+              { label: "Minutes", v: lessonsCompleted * 5 },
+            ].map(s => (
+              <div key={s.label} style={{ flex: 1, textAlign: "center", padding: "8px 4px", background: "rgba(255,255,255,0.6)", borderRadius: 12 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.primary }}>{s.v}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      {/* Pick mascot */}
+      <div className="px-6 pb-5">
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, marginBottom: 10 }}>Your Lexi Friend</div>
+        <div className="flex gap-3 justify-between">
+          {mascots.map((MC, i) => (
+            <motion.button
+              key={i}
+              whileTap={{ scale: 0.88 }}
+              onClick={() => setSelectedMascot(i)}
+              style={{
+                flex: 1, padding: "8px 0", borderRadius: 16,
+                background: selectedMascot === i ? C.primarySoft : C.white,
+                border: `2px solid ${selectedMascot === i ? C.primary : "transparent"}`,
+                boxShadow: selectedMascot === i ? `0 4px 12px rgba(108,71,255,0.2)` : "0 2px 8px rgba(0,0,0,0.06)",
+                cursor: "pointer",
+                display: "flex", flexDirection: "column", alignItems: "center",
+              }}
+            >
+              <MC size={46} pose={selectedMascot === i ? "happy" : "idle"} />
+            </motion.button>
+          ))}
+        </div>
+      </div>
+      {/* Customize Your View */}
+      <div className="px-6 pb-5">
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, marginBottom: 10 }}>Customize Your View</div>
+        <Card className="p-5 flex flex-col gap-5">
+          {/* Text size */}
+          <div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>Text Size</div>
+            <div className="flex gap-2">
+              {(["small", "medium", "large"] as const).map(sz => (
+                <button
+                  key={sz}
+                  onClick={() => setTextSize(sz)}
+                  style={{
+                    flex: 1, padding: "10px 0", borderRadius: 12,
+                    background: textSize === sz ? C.primary : C.primarySoft,
+                    color: textSize === sz ? "white" : C.primary,
+                    fontFamily: uiFont, fontWeight: 700,
+                    fontSize: sz === "small" ? 11 : sz === "medium" ? 13 : 15,
+                    border: "none", cursor: "pointer",
+                  }}
+                >
+                  {sz === "small" ? "A" : sz === "medium" ? "A" : "A"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Background tints */}
+          <div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>Background Color</div>
+            <div className="flex gap-3">
+              {bgTints.map((bg, i) => (
+                <motion.button
+                  key={bg.label}
+                  whileTap={{ scale: 0.88 }}
+                  onClick={() => setSelectedBg(i)}
+                  style={{
+                    width: 36, height: 36, borderRadius: 18,
+                    background: bg.value,
+                    border: `3px solid ${selectedBg === i ? C.primary : "rgba(0,0,0,0.1)"}`,
+                    cursor: "pointer",
+                    boxShadow: selectedBg === i ? `0 3px 10px rgba(108,71,255,0.3)` : "none",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          {/* Live preview */}
+          <div style={{
+            padding: "16px",
+            borderRadius: 12,
+            background: bgTints[selectedBg].value,
+            border: "1px solid rgba(0,0,0,0.08)",
+          }}>
+            <div style={{ fontSize: textSize === "small" ? 18 : textSize === "medium" ? 22 : 28, fontFamily: dyslexicFont, color: C.ink }}>
+              <span style={{ color: C.teal }}>SH</span>ip
+            </div>
+            <div style={{ fontSize: textSize === "small" ? 11 : textSize === "medium" ? 13 : 15, color: C.muted, marginTop: 4, fontFamily: uiFont }}>
+              Preview: {bgTints[selectedBg].label}
+            </div>
+          </div>
+        </Card>
+      </div>
+      {/* Parent section */}
+      <div className="px-6 pb-10">
+        <Card className="p-5 flex items-center justify-between" style={{ background: C.amberSoft }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Parent Dashboard</div>
+            <div style={{ fontSize: 12, color: C.muted }}>Detailed progress & settings</div>
+          </div>
+          <div style={{
+            width: 44, height: 44, borderRadius: 22,
+            background: C.amber, display: "flex", alignItems: "center", justifyContent: "center"
+          }}>
+            <Shield size={22} color="white" />
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── Bottom Tab Bar ────────────────────────────────────────────────────────────
+const TAB_DEF: { id: Tab; label: string; icon: React.ReactNode; MascotComp: React.FC<{ size?: number; pose?: string }> }[] = [
+  { id: "home", label: "Home", icon: <Home size={22} />, MascotComp: Lexi },
+  { id: "learn", label: "Learn", icon: <BookOpen size={22} />, MascotComp: Glow },
+  { id: "progress", label: "Progress", icon: <BarChart2 size={22} />, MascotComp: Echo },
+  { id: "rewards", label: "Rewards", icon: <Gift size={22} />, MascotComp: Bubble },
+  { id: "profile", label: "Profile", icon: <User size={22} />, MascotComp: Brick },
+];
+
+function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  return (
+    <div
+      style={{
+        height: 84,
+        background: C.white,
+        borderTop: `1px solid rgba(108,71,255,0.1)`,
+        display: "flex",
+        alignItems: "center",
+        paddingBottom: 8,
+        boxShadow: "0 -4px 20px rgba(108,71,255,0.08)",
+      }}
+    >
+      {TAB_DEF.map(t => {
+        const isActive = t.id === active;
+        return (
+          <motion.button
+            key={t.id}
+            whileTap={{ scale: 0.88 }}
+            onClick={() => onChange(t.id)}
+            style={{
+              flex: 1, height: "100%",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
+              paddingBottom: 8, gap: 0,
+              background: "none", border: "none", cursor: "pointer",
+              position: "relative",
+              fontFamily: uiFont,
+            }}
+          >
+            {/* Mascot peek on active */}
+            {isActive && (
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                style={{
+                  position: "absolute",
+                  top: -32,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                }}
+              >
+                <t.MascotComp size={38} pose="happy" />
+              </motion.div>
+            )}
+            {/* Icon pill */}
+            <div style={{
+              padding: isActive ? "6px 18px" : "6px",
+              borderRadius: 20,
+              background: isActive ? C.primarySoft : "transparent",
+              color: isActive ? C.primary : C.muted,
+              transition: "all 0.2s",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {t.icon}
+            </div>
+            <div style={{
+              fontSize: 10, fontWeight: isActive ? 700 : 500,
+              color: isActive ? C.primary : C.muted,
+              marginTop: 2,
+            }}>
+              {t.label}
+            </div>
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const onboarded = useStore(s => s.onboarded);
+  const [screen, setScreen] = useState<Screen>(onboarded ? "home" : "splash");
+  const [tab, setTab] = useState<Tab>("home");
+  const showTabs = ["home", "learn", "progress", "rewards", "profile"].includes(screen) && screen !== "lesson";
+  const handleTabChange = (t: Tab) => {
+    setTab(t);
+    setScreen(t as Screen);
+  };
+  const handleStartLesson = () => setScreen("lesson");
+  const handleLessonDone = () => {
+    setTab("home");
+    setScreen("home");
+  };
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: `linear-gradient(135deg, #E8E0FF 0%, #FFFDF5 40%, #D4F0E8 100%)`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        fontFamily: uiFont,
+      }}
+    >
+      {/* Phone frame */}
+      <div
+        style={{
+          width: 390,
+          height: 844,
+          borderRadius: 52,
+          overflow: "hidden",
+          position: "relative",
+          background: C.bg,
+          boxShadow: "0 60px 120px rgba(108, 71, 255, 0.25), 0 0 0 12px #1A1A2E, 0 0 0 14px rgba(255,255,255,0.3)",
+          flexShrink: 0,
+        }}
+      >
+        {/* Status bar notch */}
+        <div style={{
+          position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
+          width: 120, height: 34, background: "#1A1A2E", borderRadius: "0 0 20px 20px",
+          zIndex: 100,
+        }} />
+        {/* Screen content */}
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: showTabs ? 84 : 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          background: C.bg,
+        }}>
+          {screen === "splash" && <SplashScreen onNext={() => setScreen("onboard")} />}
+          {screen === "onboard" && <OnboardingFlow onDone={() => { setScreen("home"); setTab("home"); }} />}
+          {screen === "home" && <HomeScreen onStartLesson={handleStartLesson} onTabChange={handleTabChange} />}
+          {screen === "learn" && <LearnScreen onStartLesson={handleStartLesson} />}
+          {screen === "lesson" && <LessonScreen onDone={handleLessonDone} />}
+          {screen === "progress" && <ProgressScreen />}
+          {screen === "rewards" && <RewardsScreen />}
+          {screen === "profile" && <ProfileScreen />}
+        </div>
+        {/* Tab bar */}
+        {showTabs && (
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}>
+            <TabBar active={tab} onChange={handleTabChange} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
