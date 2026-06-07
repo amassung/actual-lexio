@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# Build output
+dist/
+build/
+.vite/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+*.log
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# Claude / local tooling
+.claude/launch.json
