@@ -123,6 +123,347 @@ type Tab = "home" | "learn" | "progress" | "rewards" | "profile";
 type MicState = "idle" | "listening" | "processing" | "encourage";
 type WinVariant = "small" | "streak" | "level";
 
+// ─── Lesson Data ──────────────────────────────────────────────────────────────
+type LessonData = {
+  id: string;
+  phoneme: string;
+  word: string;
+  wordEmoji: string;
+  tipText: string;
+  phonemeParts: { letters: string; label: string; highlight: boolean }[];
+  traceStrokes: string[];
+  traceViewBox: string;
+  sayAccept: RegExp;
+  buildSlots: string[];
+  buildTiles: string[];
+  xpReward: number;
+  isBoss?: boolean;
+};
+
+const LESSONS: Record<string, LessonData> = {
+  // ── Level 1: Structured Literacy sequence (m, s, t, short-a, p, n) ──────────
+  "m-sound": {
+    id: "m-sound", phoneme: "M", word: "mat", wordEmoji: "🟫",
+    tipText: 'M says "mmm" — hum with your lips together, like tasting something yummy!',
+    phonemeParts: [
+      { letters: "M", label: "The sound", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "T", label: "The stop", highlight: false },
+    ],
+    traceStrokes: [
+      "M 60 200 L 60 50", "M 60 50 L 180 150",
+      "M 180 150 L 300 50", "M 300 50 L 300 200",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(mat|map|man|mad|mud|mop|met|mix|mob|mug)\b/i,
+    buildSlots: ["M", "A", "T"], buildTiles: ["M", "A", "T", "S", "P", "N"],
+    xpReward: 15,
+  },
+  "s-sound": {
+    id: "s-sound", phoneme: "S", word: "sat", wordEmoji: "🧸",
+    tipText: 'S says "sss" — like a snake hissing! Keep your tongue behind your teeth.',
+    phonemeParts: [
+      { letters: "S", label: "The sound", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "T", label: "The stop", highlight: false },
+    ],
+    traceStrokes: [
+      "M 270 75 Q 180 50 130 100 Q 90 140 180 165 Q 240 185 270 160",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(sat|sit|sun|sap|sip|sad|set|sob|sum|sot)\b/i,
+    buildSlots: ["S", "A", "T"], buildTiles: ["S", "A", "T", "M", "P", "N"],
+    xpReward: 15,
+  },
+  "t-sound": {
+    id: "t-sound", phoneme: "T", word: "tap", wordEmoji: "🚰",
+    tipText: 'T says "t-t-t" — a quick tap of your tongue on the roof of your mouth!',
+    phonemeParts: [
+      { letters: "T", label: "The sound", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "P", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 60 75 L 300 75", "M 180 75 L 180 210",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(tap|tan|tip|top|tub|tab|ten|tin|tug|tot)\b/i,
+    buildSlots: ["T", "A", "P"], buildTiles: ["T", "A", "P", "M", "S", "N"],
+    xpReward: 15,
+  },
+  "p-sound": {
+    id: "p-sound", phoneme: "P", word: "pan", wordEmoji: "🍳",
+    tipText: 'P says "p-p-p" — pop your lips together like blowing a tiny bubble!',
+    phonemeParts: [
+      { letters: "P", label: "The sound", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "N", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210",
+      "M 80 50 Q 260 50 260 120 Q 260 190 80 190",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(pan|pat|pit|pot|pup|pad|pen|pin|pun|pap)\b/i,
+    buildSlots: ["P", "A", "N"], buildTiles: ["P", "A", "N", "M", "S", "T"],
+    xpReward: 15,
+  },
+  "n-sound": {
+    id: "n-sound", phoneme: "N", word: "nap", wordEmoji: "😴",
+    tipText: 'N says "nnn" — feel the buzz in your nose as air flows through!',
+    phonemeParts: [
+      { letters: "N", label: "The sound", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "P", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210", "M 80 50 L 280 210", "M 280 50 L 280 210",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(nap|net|nit|not|nut|nab|nag|nod|nun|nip)\b/i,
+    buildSlots: ["N", "A", "P"], buildTiles: ["N", "A", "P", "M", "S", "T"],
+    xpReward: 15,
+  },
+  "level1-boss": {
+    id: "level1-boss", phoneme: "M S T A P N", word: "Level 1", wordEmoji: "🏆",
+    tipText: "You know M, S, T, short-A, P, and N — that's real reading power!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["M", "A", "T"], buildTiles: ["M", "A", "T", "S", "P", "N"],
+    xpReward: 75, isBoss: true,
+  },
+  // ── Level 2: Remaining short vowels ──────────────────────────────────────────
+  "short-a": {
+    id: "short-a", phoneme: "A", word: "cat", wordEmoji: "🐱",
+    tipText: 'Short A says "aah" — like when you open wide at the doctor!',
+    phonemeParts: [
+      { letters: "C", label: "The start", highlight: false },
+      { letters: "A", label: "Short A", highlight: true },
+      { letters: "T", label: "The stop", highlight: false },
+    ],
+    traceStrokes: ["M 60 200 L 180 60", "M 180 60 L 300 200", "M 100 145 L 260 145"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(cat|cap|can|mat|bat|hat|sat|fat|rat|tap|map|nap)\b/i,
+    buildSlots: ["C", "A", "T"], buildTiles: ["C", "A", "T", "S", "B", "H"],
+    xpReward: 15,
+  },
+  "short-e": {
+    id: "short-e", phoneme: "E", word: "hen", wordEmoji: "🐔",
+    tipText: 'Short E says "ehh" — like when you\'re not sure about something!',
+    phonemeParts: [
+      { letters: "H", label: "The start", highlight: false },
+      { letters: "E", label: "Short E", highlight: true },
+      { letters: "N", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 80 60 L 80 200", "M 80 60 L 260 60", "M 80 130 L 220 130", "M 80 200 L 260 200"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(hen|bed|pet|set|net|wet|ten|pen|men|red|fed|led)\b/i,
+    buildSlots: ["H", "E", "N"], buildTiles: ["H", "E", "N", "B", "D", "T"],
+    xpReward: 15,
+  },
+  "short-i": {
+    id: "short-i", phoneme: "I", word: "big", wordEmoji: "🐘",
+    tipText: 'Short I says "ih" — a quick little sound in the middle!',
+    phonemeParts: [
+      { letters: "B", label: "The start", highlight: false },
+      { letters: "I", label: "Short I", highlight: true },
+      { letters: "G", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 180 60 L 180 200", "M 140 60 L 220 60", "M 140 200 L 220 200"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(big|bit|sit|lip|tip|dip|hip|rip|sip|zip|fig|dig)\b/i,
+    buildSlots: ["B", "I", "G"], buildTiles: ["B", "I", "G", "P", "A", "D"],
+    xpReward: 15,
+  },
+  "vowel-boss": {
+    id: "vowel-boss", phoneme: "A E I", word: "vowels", wordEmoji: "🏆",
+    tipText: "You mastered all the short vowels — A, E, and I!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["A", "E", "I"], buildTiles: ["A", "E", "I", "O", "U"],
+    xpReward: 50, isBoss: true,
+  },
+  "sh-sound": {
+    id: "sh-sound", phoneme: "SH", word: "ship", wordEmoji: "⛵",
+    tipText: 'SH together make one special sound — like saying "shhhh"!',
+    phonemeParts: [
+      { letters: "SH", label: "The blend", highlight: true },
+      { letters: "i", label: "Short I", highlight: false },
+      { letters: "p", label: "The stop", highlight: false },
+    ],
+    traceStrokes: [
+      "M 150 70 Q 60 60 60 105 Q 60 135 105 135 Q 150 135 150 165 Q 150 200 60 195",
+      "M 210 60 L 210 200", "M 300 60 L 300 200", "M 210 130 L 300 130",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(ship|sheep|shape|shift|chip|shed|shell|shop|shot)\b/i,
+    buildSlots: ["SH", "I", "P"], buildTiles: ["SH", "I", "P", "T", "R", "CH"],
+    xpReward: 20,
+  },
+  "ch-sound": {
+    id: "ch-sound", phoneme: "CH", word: "chip", wordEmoji: "🍟",
+    tipText: 'CH makes a sound like a sneeze — "ch ch ch"!',
+    phonemeParts: [
+      { letters: "CH", label: "The blend", highlight: true },
+      { letters: "i", label: "Short I", highlight: false },
+      { letters: "p", label: "The stop", highlight: false },
+    ],
+    traceStrokes: [
+      "M 160 70 Q 80 60 80 130 Q 80 200 160 195",
+      "M 210 60 L 210 200", "M 300 60 L 300 200", "M 210 130 L 300 130",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(chip|chat|chin|chop|chum|check|chest|chair|chick|chest)\b/i,
+    buildSlots: ["CH", "I", "P"], buildTiles: ["CH", "I", "P", "SH", "T", "R"],
+    xpReward: 20,
+  },
+  "th-sound": {
+    id: "th-sound", phoneme: "TH", word: "that", wordEmoji: "👉",
+    tipText: 'TH is made by putting your tongue between your teeth — try it!',
+    phonemeParts: [
+      { letters: "TH", label: "The blend", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "T", label: "The stop", highlight: false },
+    ],
+    traceStrokes: [
+      "M 60 70 L 160 70", "M 110 70 L 110 200",
+      "M 200 60 L 200 200", "M 290 60 L 290 200", "M 200 130 L 290 130",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(that|this|the|them|then|thin|thick|think|thing|thank)\b/i,
+    buildSlots: ["TH", "A", "T"], buildTiles: ["TH", "A", "T", "SH", "CH", "S"],
+    xpReward: 20,
+  },
+  "blend-boss": {
+    id: "blend-boss", phoneme: "SH CH TH", word: "blends", wordEmoji: "🏆",
+    tipText: "You mastered SH, CH, and TH blends — amazing!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["SH", "CH", "TH"], buildTiles: ["SH", "CH", "TH", "BL", "ST"],
+    xpReward: 50, isBoss: true,
+  },
+  "long-a": {
+    id: "long-a", phoneme: "AI", word: "rain", wordEmoji: "🌧",
+    tipText: 'AI makes the long A sound — it says its own name, "ayyy"!',
+    phonemeParts: [
+      { letters: "R", label: "The start", highlight: false },
+      { letters: "AI", label: "Long A", highlight: true },
+      { letters: "N", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 80 200 L 180 60", "M 180 60 L 280 200", "M 115 145 L 245 145"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(rain|main|pain|gain|train|brain|plain|mail|tail|sail|wait|bait)\b/i,
+    buildSlots: ["R", "AI", "N"], buildTiles: ["R", "AI", "N", "T", "SH", "CH"],
+    xpReward: 25,
+  },
+  "long-e": {
+    id: "long-e", phoneme: "EE", word: "feet", wordEmoji: "🦶",
+    tipText: 'EE makes the long E sound — stretch it out and say "eeee"!',
+    phonemeParts: [
+      { letters: "F", label: "The start", highlight: false },
+      { letters: "EE", label: "Long E", highlight: true },
+      { letters: "T", label: "The stop", highlight: false },
+    ],
+    traceStrokes: ["M 80 60 L 80 200", "M 80 60 L 260 60", "M 80 130 L 220 130", "M 80 200 L 260 200"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(feet|tree|bee|see|fee|free|seed|feed|need|weed|meet|teeth)\b/i,
+    buildSlots: ["F", "EE", "T"], buildTiles: ["F", "EE", "T", "B", "S", "CH"],
+    xpReward: 25,
+  },
+  "short-o": {
+    id: "short-o", phoneme: "O", word: "dog", wordEmoji: "🐶",
+    tipText: 'Short O says "aah" — a short round sound!',
+    phonemeParts: [
+      { letters: "D", label: "The start", highlight: false },
+      { letters: "O", label: "Short O", highlight: true },
+      { letters: "G", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 180 70 Q 80 70 80 135 Q 80 200 180 200 Q 280 200 280 135 Q 280 70 180 70"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(dog|log|fog|hot|pot|dot|got|lot|mop|top|hop|box|fox)\b/i,
+    buildSlots: ["D", "O", "G"], buildTiles: ["D", "O", "G", "B", "A", "T"],
+    xpReward: 20,
+  },
+  "short-u": {
+    id: "short-u", phoneme: "U", word: "sun", wordEmoji: "☀",
+    tipText: 'Short U says "uh" — short and round like a bubble!',
+    phonemeParts: [
+      { letters: "S", label: "The start", highlight: false },
+      { letters: "U", label: "Short U", highlight: true },
+      { letters: "N", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 100 60 L 100 165 Q 100 210 180 210 Q 260 210 260 165 L 260 60"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(sun|bun|fun|run|gun|cup|pup|mud|bud|bug|mug|rug)\b/i,
+    buildSlots: ["S", "U", "N"], buildTiles: ["S", "U", "N", "B", "A", "T"],
+    xpReward: 20,
+  },
+  "long-i": {
+    id: "long-i", phoneme: "IGH", word: "night", wordEmoji: "🌙",
+    tipText: 'IGH makes the long I sound — it says "I" like you say about yourself!',
+    phonemeParts: [
+      { letters: "N", label: "The start", highlight: false },
+      { letters: "IGH", label: "Long I", highlight: true },
+      { letters: "T", label: "The stop", highlight: false },
+    ],
+    traceStrokes: ["M 180 60 L 180 200", "M 140 60 L 220 60", "M 140 200 L 220 200"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(night|light|right|fight|sight|might|tight|bright|flight|fright)\b/i,
+    buildSlots: ["N", "IGH", "T"], buildTiles: ["N", "IGH", "T", "B", "SH", "CH"],
+    xpReward: 25,
+  },
+  "long-o": {
+    id: "long-o", phoneme: "OA", word: "boat", wordEmoji: "🚤",
+    tipText: 'OA makes the long O sound — like "oh" when you\'re surprised!',
+    phonemeParts: [
+      { letters: "B", label: "The start", highlight: false },
+      { letters: "OA", label: "Long O", highlight: true },
+      { letters: "T", label: "The stop", highlight: false },
+    ],
+    traceStrokes: ["M 180 70 Q 80 70 80 135 Q 80 200 180 200 Q 280 200 280 135 Q 280 70 180 70"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(boat|coat|goat|moat|road|load|toad|toast|roast|coast|float)\b/i,
+    buildSlots: ["B", "OA", "T"], buildTiles: ["B", "OA", "T", "C", "SH", "N"],
+    xpReward: 25,
+  },
+  "vowel-boss-2": {
+    id: "vowel-boss-2", phoneme: "★", word: "vowels", wordEmoji: "🏆",
+    tipText: "You mastered ALL the vowels — short and long!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["A", "E", "I"], buildTiles: ["A", "E", "I", "O", "U"],
+    xpReward: 75, isBoss: true,
+  },
+};
+
+const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x: number }[] = [
+  // Level 1 — Structured Literacy sequence
+  { id: "m-sound",     label: "M Sound",    sub: "mat, man, mud",      boss: false, x: 60 },
+  { id: "s-sound",     label: "S Sound",    sub: "sat, sit, sun",      boss: false, x: 240 },
+  { id: "t-sound",     label: "T Sound",    sub: "tap, tan, tip",      boss: false, x: 140 },
+  { id: "short-a",     label: "Short A",    sub: "mat, sat, tap",      boss: false, x: 60 },
+  { id: "p-sound",     label: "P Sound",    sub: "pan, pat, pit",      boss: false, x: 240 },
+  { id: "n-sound",     label: "N Sound",    sub: "nap, net, nit",      boss: false, x: 140 },
+  { id: "level1-boss", label: "Level 1!",   sub: "You crushed it!",    boss: true,  x: 195 },
+  // Level 2 — More short vowels
+  { id: "short-i",     label: "Short I",    sub: "big, sit, lip",      boss: false, x: 80 },
+  { id: "short-e",     label: "Short E",    sub: "hen, bed, pet",      boss: false, x: 250 },
+  { id: "short-o",     label: "Short O",    sub: "dog, hot, fox",      boss: false, x: 140 },
+  { id: "short-u",     label: "Short U",    sub: "sun, bun, cup",      boss: false, x: 60 },
+  { id: "vowel-boss",  label: "Vowel Boss!",sub: "All short vowels!",  boss: true,  x: 195 },
+  // Level 3 — Blends & digraphs
+  { id: "sh-sound",    label: "SH Sound",   sub: "ship, shell, fish",  boss: false, x: 80 },
+  { id: "ch-sound",    label: "CH Sound",   sub: "chip, chop, much",   boss: false, x: 250 },
+  { id: "th-sound",    label: "TH Sound",   sub: "the, this, that",    boss: false, x: 140 },
+  { id: "blend-boss",  label: "Blend Boss!",sub: "Master level",       boss: true,  x: 195 },
+  // Level 4 — Long vowels
+  { id: "long-a",      label: "Long A",     sub: "rain, tail, wait",   boss: false, x: 80 },
+  { id: "long-e",      label: "Long E",     sub: "feet, tree, bee",    boss: false, x: 240 },
+  { id: "long-i",      label: "Long I",     sub: "night, light, right",boss: false, x: 140 },
+  { id: "long-o",      label: "Long O",     sub: "boat, road, coat",   boss: false, x: 60 },
+  { id: "vowel-boss-2",label: "Vowel Master!",sub: "All vowels!",      boss: true,  x: 195 },
+];
+
 // ─── Lexi mascot (lavender, star wand) ───────────────────────────────────────
 function Lexi({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
   const happy = pose === "happy" || pose === "celebrating";
@@ -636,18 +977,18 @@ function OnboardingFlow({ onDone }: { onDone: () => void }) {
 }
 
 // ─── Home Screen ──────────────────────────────────────────────────────────────
-const pathNodes = [
-  { id: 1, label: "Short A", emoji: "🅰", done: true, x: 60 },
-  { id: 2, label: "Short E", emoji: "🔤", done: true, x: 220 },
-  { id: 3, label: "SH Sound", emoji: "🔊", done: false, current: true, x: 130 },
-  { id: 4, label: "CH Sound", emoji: "✨", done: false, x: 240 },
-];
-
 function HomeScreen({ onStartLesson, onTabChange }: {
   onStartLesson: () => void; onTabChange: (t: Tab) => void;
 }) {
   const name = useStore(s => s.name) || "friend";
   const streak = useStore(s => s.streak);
+  const masteredPhonemes = useStore(s => s.masteredPhonemes);
+  const pathNodes = LEARN_PATH_DEF.slice(0, 4).map((def, i) => {
+    const done = masteredPhonemes.includes(def.id);
+    const prevDone = i === 0 || masteredPhonemes.includes(LEARN_PATH_DEF[i - 1].id);
+    const current = !done && prevDone;
+    return { ...def, done, current };
+  });
   const greeting = (() => {
     const h = new Date().getHours();
     return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
@@ -719,7 +1060,7 @@ function HomeScreen({ onStartLesson, onTabChange }: {
                 <div className="flex flex-col items-center gap-1">
                   <motion.div
                     whileTap={{ scale: 0.9 }}
-                    onClick={node.current ? onStartLesson : undefined}
+                    onClick={!node.done && node.current || node.done ? onStartLesson : undefined}
                     style={{
                       width: 56, height: 56, borderRadius: 28,
                       background: node.done ? C.teal : node.current
@@ -804,30 +1145,32 @@ function HomeScreen({ onStartLesson, onTabChange }: {
 }
 
 // ─── Learn / Path Screen ──────────────────────────────────────────────────────
-const learnPath = [
-  { id: 1, label: "Short A", sub: "cat, bat, hat", done: true, boss: false, x: 60 },
-  { id: 2, label: "Short E", sub: "hen, bed, pet", done: true, boss: false, x: 240 },
-  { id: 3, label: "Short I", sub: "big, sit, lip", done: true, boss: false, x: 140 },
-  { id: 4, label: "Vowel Boss!", sub: "Master level", done: true, boss: true, x: 195 },
-  { id: 5, label: "SH Sound", sub: "ship, shell, fish", done: false, current: true, x: 80 },
-  { id: 6, label: "CH Sound", sub: "chip, chop, much", done: false, x: 250 },
-  { id: 7, label: "TH Sound", sub: "the, this, that", done: false, locked: true, x: 140 },
-  { id: 8, label: "Blend Boss!", sub: "Master level", done: false, boss: true, locked: true, x: 195 },
-  { id: 9, label: "Long A", sub: "cake, lake, tape", done: false, locked: true, x: 80 },
-  { id: 10, label: "Long E", sub: "feet, tree, bee", done: false, locked: true, x: 240 },
-];
+function LearnScreen({ onStartLesson }: { onStartLesson: (id: string) => void }) {
+  const masteredPhonemes = useStore(s => s.masteredPhonemes);
 
-function LearnScreen({ onStartLesson }: { onStartLesson: () => void }) {
+  const learnPath = LEARN_PATH_DEF.map((def, i) => {
+    const done = masteredPhonemes.includes(def.id);
+    const prevDone = i === 0 || masteredPhonemes.includes(LEARN_PATH_DEF[i - 1].id);
+    const locked = !done && !prevDone;
+    const current = !done && prevDone;
+    return { ...def, done, locked, current };
+  });
+
+  const doneCount = learnPath.filter(n => n.done).length;
+  const chapterIdx = Math.floor(doneCount / 4);
+  const chapterNames = ["Level 1: First Sounds (M, S, T, A, P, N)", "Level 2: Short Vowels", "Level 3: Blends & Digraphs", "Level 4: Long Vowels"];
+  const chapterName = chapterNames[Math.min(chapterIdx, chapterNames.length - 1)];
+
   return (
     <div className="flex flex-col h-full" style={{ fontFamily: uiFont, background: C.bg }}>
       <div className="px-6 pt-14 pb-4">
         <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Learning Path</div>
-        <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>Chapter 2: Blends & Digraphs</div>
+        <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>{chapterName}</div>
         <div className="flex gap-3 mt-4">
           {[
-            { label: "4 done", color: C.teal },
-            { label: "Chapter 2", color: C.primary },
-            { label: "Level 3", color: C.amber },
+            { label: `${doneCount} done`, color: C.teal },
+            { label: `Chapter ${chapterIdx + 1}`, color: C.primary },
+            { label: `Level ${doneCount + 1}`, color: C.amber },
           ].map(b => (
             <div key={b.label} style={{
               padding: "6px 14px", borderRadius: 20,
@@ -838,7 +1181,6 @@ function LearnScreen({ onStartLesson }: { onStartLesson: () => void }) {
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-8">
         <div style={{ position: "relative", minHeight: learnPath.length * 88 + 80 }}>
-          {/* Path connector SVG */}
           <svg
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}
             viewBox={`0 0 390 ${learnPath.length * 88 + 80}`}
@@ -848,15 +1190,11 @@ function LearnScreen({ onStartLesson }: { onStartLesson: () => void }) {
               const next = learnPath[i + 1];
               const y1 = 56 + i * 88;
               const y2 = 56 + (i + 1) * 88;
-              const isDone = node.done && next.done;
               return (
                 <line
                   key={i}
-                  x1={node.x + 28}
-                  y1={y1}
-                  x2={next.x + 28}
-                  y2={y2}
-                  stroke={isDone ? C.teal : C.primarySoft}
+                  x1={node.x + 28} y1={y1} x2={next.x + 28} y2={y2}
+                  stroke={node.done && next.done ? C.teal : C.primarySoft}
                   strokeWidth={4}
                   strokeDasharray={next.locked ? "8 6" : "none"}
                   strokeLinecap="round"
@@ -864,7 +1202,6 @@ function LearnScreen({ onStartLesson }: { onStartLesson: () => void }) {
               );
             })}
           </svg>
-          {/* Nodes */}
           {learnPath.map((node, i) => (
             <motion.div
               key={node.id}
@@ -872,18 +1209,13 @@ function LearnScreen({ onStartLesson }: { onStartLesson: () => void }) {
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: i * 0.05 }}
               style={{
-                position: "absolute",
-                top: i * 88 + 12,
-                left: node.x,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 6,
+                position: "absolute", top: i * 88 + 12, left: node.x,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
               }}
             >
               <motion.button
                 whileTap={!node.locked ? { scale: 0.9 } : {}}
-                onClick={node.current ? onStartLesson : undefined}
+                onClick={!node.locked && !node.done ? () => onStartLesson(node.id) : node.done ? () => onStartLesson(node.id) : undefined}
                 style={{
                   width: node.boss ? 72 : 56,
                   height: node.boss ? 72 : 56,
@@ -892,17 +1224,11 @@ function LearnScreen({ onStartLesson }: { onStartLesson: () => void }) {
                     ? `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`
                     : node.current
                       ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`
-                      : node.locked
-                        ? "#E8E5F0"
-                        : C.primarySoft,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                      : node.locked ? "#E8E5F0" : C.primarySoft,
+                  display: "flex", alignItems: "center", justifyContent: "center",
                   boxShadow: node.current
                     ? `0 8px 24px rgba(108,71,255,0.4)`
-                    : node.boss && node.done
-                      ? `0 6px 18px rgba(93,202,165,0.4)`
-                      : "none",
+                    : node.boss && node.done ? `0 6px 18px rgba(93,202,165,0.4)` : "none",
                   border: node.current ? `3px solid white` : "none",
                   cursor: node.locked ? "default" : "pointer",
                 }}
@@ -934,19 +1260,22 @@ function LearnScreen({ onStartLesson }: { onStartLesson: () => void }) {
 }
 
 // ─── Lesson: Hear It ──────────────────────────────────────────────────────────
-function HearItStep({ onNext }: { onNext: () => void }) {
+function HearItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData }) {
   const [played, setPlayed] = useState(false);
   const [pulsing, setPulsing] = useState(false);
   const handlePlay = useCallback(() => {
     setPulsing(true);
     setPlayed(true);
-    speakLesson("sh", "ship");
+    speakLesson(lesson.phoneme.toLowerCase(), lesson.word);
     setTimeout(() => setPulsing(false), 2200);
-  }, []);
+  }, [lesson]);
   useEffect(() => {
     const t = setTimeout(handlePlay, 450);
     return () => { clearTimeout(t); window.speechSynthesis?.cancel(); };
   }, [handlePlay]);
+  const wordDisplay = lesson.word.toUpperCase().startsWith(lesson.phoneme.toUpperCase())
+    ? <><span style={{ color: C.teal, fontWeight: 700 }}>{lesson.phoneme}</span>{lesson.word.slice(lesson.phoneme.length)}</>
+    : <span>{lesson.word}</span>;
   return (
     <div className="flex flex-col items-center justify-between h-full px-8 py-10" style={{ fontFamily: uiFont }}>
       <div className="flex flex-col items-center gap-2">
@@ -966,20 +1295,15 @@ function HearItStep({ onNext }: { onNext: () => void }) {
           fontSize: 20, fontWeight: 600, color: C.muted, textAlign: "center",
           background: C.tealSoft, padding: "12px 24px", borderRadius: 16
         }}>
-          "Listen for the <span style={{ color: C.teal, fontWeight: 800 }}>SH</span> sound"
+          "Listen for the <span style={{ color: C.teal, fontWeight: 800 }}>{lesson.phoneme}</span> sound"
         </div>
-        {/* Big play button */}
         <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {pulsing && [1, 2].map(ring => (
             <motion.div
               key={ring}
               animate={{ scale: [1, 1.8], opacity: [0.5, 0] }}
               transition={{ duration: 1, delay: ring * 0.2, repeat: Infinity }}
-              style={{
-                position: "absolute",
-                width: 100, height: 100, borderRadius: 50,
-                background: C.teal, opacity: 0.3
-              }}
+              style={{ position: "absolute", width: 100, height: 100, borderRadius: 50, background: C.teal, opacity: 0.3 }}
             />
           ))}
           <motion.button
@@ -997,7 +1321,7 @@ function HearItStep({ onNext }: { onNext: () => void }) {
           </motion.button>
         </div>
         <div style={{ fontSize: 22, fontFamily: dyslexicFont, color: C.ink, letterSpacing: 2 }}>
-          <span style={{ color: C.teal, fontWeight: 700 }}>SH</span>ip
+          {wordDisplay}
         </div>
         {played && (
           <motion.div
@@ -1017,7 +1341,20 @@ function HearItStep({ onNext }: { onNext: () => void }) {
 }
 
 // ─── Lesson: See It ──────────────────────────────────────────────────────────
-function SeeItStep({ onNext }: { onNext: () => void }) {
+function SeeItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData }) {
+  const wordDisplay = (() => {
+    const upper = lesson.word.toUpperCase();
+    const ph = lesson.phoneme.toUpperCase();
+    if (upper.startsWith(ph)) {
+      return (
+        <>
+          <span style={{ color: C.teal, background: C.tealSoft, borderRadius: 8, padding: "2px 4px" }}>{lesson.phoneme}</span>
+          <span style={{ color: C.ink }}>{lesson.word.slice(lesson.phoneme.length)}</span>
+        </>
+      );
+    }
+    return <span style={{ color: C.ink }}>{lesson.word}</span>;
+  })();
   return (
     <div className="flex flex-col items-center justify-between h-full px-8 py-10" style={{ fontFamily: uiFont }}>
       <div className="flex flex-col items-center gap-2">
@@ -1025,79 +1362,62 @@ function SeeItStep({ onNext }: { onNext: () => void }) {
           Step 2 of 5
         </div>
         <div style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>See It</div>
-        <div style={{ fontSize: 15, color: C.muted, textAlign: "center" }}>
-          Find the special sound
-        </div>
+        <div style={{ fontSize: 15, color: C.muted, textAlign: "center" }}>Find the special sound</div>
       </div>
       <div className="flex flex-col items-center gap-6 w-full">
         <Glow size={100} pose="idle" />
-        {/* Word display */}
         <Card className="w-full p-6 flex flex-col items-center gap-4" style={{ background: C.primarySoft }}>
           <div style={{ fontFamily: dyslexicFont, fontSize: 56, letterSpacing: 4, lineHeight: 1.3 }}>
-            <span style={{
-              color: C.teal, background: C.tealSoft,
-              borderRadius: 8, padding: "2px 4px"
-            }}>SH</span>
-            <span style={{ color: C.ink }}>ip</span>
+            {wordDisplay}
           </div>
-          <div className="flex gap-2">
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => speakPhoneme("sh")}
-              style={{
-                width: 44, height: 44, borderRadius: 22,
-                background: C.white, display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                border: "none", cursor: "pointer",
-              }}
-            >
-              <Volume2 size={20} color={C.primary} />
-            </motion.button>
-          </div>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => speakPhoneme(lesson.phoneme)}
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              background: C.white, display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "none", cursor: "pointer",
+            }}
+          >
+            <Volume2 size={20} color={C.primary} />
+          </motion.button>
         </Card>
-        {/* Tip card */}
         <Card className="w-full p-4 flex gap-3" style={{ background: C.amberSoft }}>
           <div style={{ fontSize: 24 }}>💡</div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Tip from Glow</div>
-            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, marginTop: 2 }}>
-              The letters <span style={{ color: C.teal, fontWeight: 700, fontFamily: dyslexicFont }}>SH</span> together
-              make one special sound — like saying "shhhh"!
-            </div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, marginTop: 2 }}>{lesson.tipText}</div>
           </div>
         </Card>
-        {/* Phoneme breakdown — tap each to hear its sound */}
-        <div className="flex flex-col items-center gap-2 w-full">
-          <div className="flex gap-3 w-full">
-            {[
-              { letters: "SH", label: "The blend", highlight: true },
-              { letters: "i", label: "Short I", highlight: false },
-              { letters: "p", label: "The stop", highlight: false },
-            ].map(p => (
-              <motion.button
-                key={p.letters}
-                whileTap={{ scale: 0.92 }}
-                onClick={() => speakPhoneme(p.letters)}
-                style={{
-                  flex: 1, padding: "10px 0", borderRadius: 16, textAlign: "center",
-                  background: p.highlight ? C.teal : C.white,
-                  boxShadow: p.highlight ? `0 4px 12px rgba(93,202,165,0.3)` : "0 2px 8px rgba(0,0,0,0.06)",
-                  border: "none", cursor: "pointer",
-                }}
-              >
-                <div style={{ fontFamily: dyslexicFont, fontSize: 22, color: p.highlight ? "white" : C.ink, fontWeight: 700 }}>
-                  {p.letters}
-                </div>
-                <div style={{ fontSize: 10, color: p.highlight ? "rgba(255,255,255,0.8)" : C.muted, marginTop: 2 }}>
-                  {p.label}
-                </div>
-              </motion.button>
-            ))}
+        {lesson.phonemeParts.length > 0 && (
+          <div className="flex flex-col items-center gap-2 w-full">
+            <div className="flex gap-3 w-full">
+              {lesson.phonemeParts.map(p => (
+                <motion.button
+                  key={p.letters}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => speakPhoneme(p.letters)}
+                  style={{
+                    flex: 1, padding: "10px 0", borderRadius: 16, textAlign: "center",
+                    background: p.highlight ? C.teal : C.white,
+                    boxShadow: p.highlight ? `0 4px 12px rgba(93,202,165,0.3)` : "0 2px 8px rgba(0,0,0,0.06)",
+                    border: "none", cursor: "pointer",
+                  }}
+                >
+                  <div style={{ fontFamily: dyslexicFont, fontSize: 22, color: p.highlight ? "white" : C.ink, fontWeight: 700 }}>
+                    {p.letters}
+                  </div>
+                  <div style={{ fontSize: 10, color: p.highlight ? "rgba(255,255,255,0.8)" : C.muted, marginTop: 2 }}>
+                    {p.label}
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+              <Volume2 size={12} color={C.muted} /> Tap each sound to hear it
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
-            <Volume2 size={12} color={C.muted} /> Tap each sound to hear it
-          </div>
-        </div>
+        )}
       </div>
       <PrimaryBtn onClick={onNext} className="w-full text-lg">
         Got it! <ChevronRight size={20} />
@@ -1122,7 +1442,7 @@ const SH_STROKES = [
   "M 210 130 L 300 130",
 ];
 
-function TraceItStep({ onNext }: { onNext: () => void }) {
+function TraceItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData }) {
   const [attempts, setAttempts] = useState(0);
   const [encourage, setEncourage] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
@@ -1175,8 +1495,8 @@ function TraceItStep({ onNext }: { onNext: () => void }) {
         <Glow size={80} pose={complete ? "celebrating" : "idle"} />
         <Card className="w-full p-3" style={{ background: C.white }}>
           <TraceLetter
-            strokes={SH_STROKES}
-            viewBox="0 0 360 240"
+            strokes={lesson.traceStrokes}
+            viewBox={lesson.traceViewBox}
             tolerance={32}
             threshold={0.5}
             samplesPerStroke={32}
@@ -1226,10 +1546,9 @@ function TraceItStep({ onNext }: { onNext: () => void }) {
 }
 
 // ─── Lesson: Say It ──────────────────────────────────────────────────────────
-const TARGET_WORD_SAY = "ship";
-const TARGET_ACCEPT = /\b(ship|sheep|shape|shift|chip)\b/i;
-
-function SayItStep({ onNext }: { onNext: () => void }) {
+function SayItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData }) {
+  const TARGET_WORD_SAY = lesson.word;
+  const TARGET_ACCEPT = lesson.sayAccept;
   const [micState, setMicState] = useState<MicState>("idle");
   const [denied, setDenied] = useState(false);
   const [matched, setMatched] = useState(false);
@@ -1364,9 +1683,10 @@ function SayItStep({ onNext }: { onNext: () => void }) {
         <motion.div animate={micState === "encourage" ? { scale: [1, 1.08, 1] } : {}}>
           <Bubble size={110} pose={micState === "encourage" ? "happy" : "idle"} />
         </motion.div>
-        {/* Word to say */}
         <div style={{ fontFamily: dyslexicFont, fontSize: 48, color: C.ink, letterSpacing: 3 }}>
-          <span style={{ color: C.teal }}>SH</span>ip
+          {lesson.word.toUpperCase().startsWith(lesson.phoneme.toUpperCase())
+            ? <><span style={{ color: C.teal }}>{lesson.phoneme}</span>{lesson.word.slice(lesson.phoneme.length)}</>
+            : lesson.word}
         </div>
         {/* Mic button with waveform */}
         <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
@@ -1467,8 +1787,6 @@ function SayItStep({ onNext }: { onNext: () => void }) {
 }
 
 // ─── Lesson: Build It ────────────────────────────────────────────────────────
-const TARGET_WORD = "SHIP";
-const TILE_OPTIONS = ["SH", "I", "P", "T", "R", "CH"];
 
 function DragTile({ idx, letter, used, disabled }: { idx: number; letter: string; used: boolean; disabled: boolean }) {
   const [{ isDragging }, drag] = useDrag(() => ({
@@ -1556,9 +1874,9 @@ function DropSlot({
   );
 }
 
-function BuildItStep({ onNext }: { onNext: () => void }) {
-  const slots = useMemo(() => ["SH", "I", "P"], []);
-  const [filled, setFilled] = useState<(null | { tileIdx: number; letter: string })[]>([null, null, null]);
+function BuildItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData }) {
+  const slots = useMemo(() => lesson.buildSlots, [lesson]);
+  const [filled, setFilled] = useState<(null | { tileIdx: number; letter: string })[]>(() => new Array(lesson.buildSlots.length).fill(null));
   const [shake, setShake] = useState(false);
   const isCorrect = filled.every(f => f !== null);
   useEffect(() => {
@@ -1598,8 +1916,7 @@ function BuildItStep({ onNext }: { onNext: () => void }) {
       </div>
       <div className="flex flex-col items-center gap-8 w-full">
         <Brick size={100} pose={isCorrect ? "celebrating" : "idle"} />
-        {/* Word image hint */}
-        <div style={{ fontSize: 32, textAlign: "center" }}>⛵ ship</div>
+        <div style={{ fontSize: 32, textAlign: "center" }}>{lesson.wordEmoji} {lesson.word}</div>
         {/* Slots */}
         <div className="flex gap-4 justify-center">
           {slots.map((expected, i) => (
@@ -1625,7 +1942,7 @@ function BuildItStep({ onNext }: { onNext: () => void }) {
         )}
         {/* Tile bank (draggable) */}
         <div className="flex flex-wrap justify-center gap-3">
-          {TILE_OPTIONS.map((letter, i) => (
+          {lesson.buildTiles.map((letter, i) => (
             <DragTile
               key={i}
               idx={i}
@@ -1645,7 +1962,7 @@ function BuildItStep({ onNext }: { onNext: () => void }) {
 }
 
 // ─── Win Screen ───────────────────────────────────────────────────────────────
-function WinScreen({ onDone, variant = "small" }: { onDone: () => void; variant?: WinVariant }) {
+function WinScreen({ onDone, variant = "small", lesson }: { onDone: () => void; variant?: WinVariant; lesson?: LessonData }) {
   const [showXP, setShowXP] = useState(false);
   useEffect(() => { const t = setTimeout(() => setShowXP(true), 400); return () => clearTimeout(t); }, []);
   const confettiColors = [C.primary, C.teal, C.amber, C.blush, C.yellow, C.sky, C.lexi];
@@ -1656,10 +1973,11 @@ function WinScreen({ onDone, variant = "small" }: { onDone: () => void; variant?
     size: Math.random() * 10 + 6,
     rotate: Math.random() * 360,
   }));
+  const xpReward = lesson?.xpReward ?? 15;
   const variantData = {
-    small: { title: "Awesome!", sub: "You completed the lesson!", xp: 15 },
+    small: { title: "Awesome!", sub: "You completed the lesson!", xp: xpReward },
     streak: { title: "7-Day Streak!", sub: "You're on fire! Amazing dedication!", xp: 30 },
-    level: { title: "Level Up!", sub: "You've mastered SH sounds!", xp: 50 },
+    level: { title: "Level Up!", sub: `You've mastered ${lesson?.phoneme ?? "it"}!`, xp: xpReward },
   };
   const { title, sub, xp } = variantData[variant];
   return (
@@ -1731,7 +2049,7 @@ function WinScreen({ onDone, variant = "small" }: { onDone: () => void; variant?
           }}
         >
           <Check size={16} color="white" />
-          <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>SH Sound — Mastered!</span>
+          <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{lesson?.phoneme ?? "Lesson"} — Mastered!</span>
         </motion.div>
       </div>
       <PrimaryBtn onClick={onDone} className="w-full text-xl z-10">
@@ -1742,8 +2060,9 @@ function WinScreen({ onDone, variant = "small" }: { onDone: () => void; variant?
 }
 
 // ─── Lesson Player Shell ──────────────────────────────────────────────────────
-function LessonScreen({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState<LessonStep>("hear");
+function LessonScreen({ onDone, lessonId }: { onDone: (lessonId: string) => void; lessonId: string }) {
+  const lesson = LESSONS[lessonId] ?? LESSONS["sh-sound"];
+  const [step, setStep] = useState<LessonStep>(lesson.isBoss ? "win" : "hear");
   const steps: LessonStep[] = ["hear", "see", "trace", "say", "build", "win"];
   const stepIdx = steps.indexOf(step);
   const next = () => {
@@ -1755,12 +2074,11 @@ function LessonScreen({ onDone }: { onDone: () => void }) {
   };
   return (
     <div className="flex flex-col h-full" style={{ background: C.bg }}>
-      {/* Progress header */}
       {step !== "win" && (
         <div className="flex items-center gap-3 px-5 pt-12 pb-4">
           <motion.button
             whileTap={{ scale: 0.88 }}
-            onClick={onDone}
+            onClick={() => onDone("")}
             style={{
               width: 44, height: 44, borderRadius: 22,
               background: C.primarySoft, display: "flex", alignItems: "center", justifyContent: "center"
@@ -1787,16 +2105,16 @@ function LessonScreen({ onDone }: { onDone: () => void }) {
         </div>
       )}
       <div className="flex-1 overflow-hidden">
-        {step === "hear" && <HearItStep onNext={next} />}
-        {step === "see" && <SeeItStep onNext={next} />}
-        {step === "trace" && <TraceItStep onNext={next} />}
-        {step === "say" && <SayItStep onNext={next} />}
+        {step === "hear" && <HearItStep onNext={next} lesson={lesson} />}
+        {step === "see" && <SeeItStep onNext={next} lesson={lesson} />}
+        {step === "trace" && <TraceItStep onNext={next} lesson={lesson} />}
+        {step === "say" && <SayItStep onNext={next} lesson={lesson} />}
         {step === "build" && (
           <DndProvider backend={DndBackend} options={isTouch ? { enableMouseEvents: true } : undefined}>
-            <BuildItStep onNext={next} />
+            <BuildItStep onNext={next} lesson={lesson} />
           </DndProvider>
         )}
-        {step === "win" && <WinScreen onDone={onDone} variant="small" />}
+        {step === "win" && <WinScreen onDone={() => onDone(lessonId)} variant={lesson.isBoss ? "level" : "small"} lesson={lesson} />}
       </div>
     </div>
   );
@@ -2311,18 +2629,38 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const onboarded = useStore(s => s.onboarded);
+  const completeLesson = useStore(s => s.completeLesson);
+  const masteredPhonemes = useStore(s => s.masteredPhonemes);
   const [screen, setScreen] = useState<Screen>(onboarded ? "home" : "splash");
   const [tab, setTab] = useState<Tab>("home");
+  const [currentLessonId, setCurrentLessonId] = useState<string>("sh-sound");
   const showTabs = ["home", "learn", "progress", "rewards", "profile"].includes(screen) && screen !== "lesson";
-  const handleTabChange = (t: Tab) => {
-    setTab(t);
-    setScreen(t as Screen);
+
+  const handleTabChange = (t: Tab) => { setTab(t); setScreen(t as Screen); };
+
+  const handleStartLesson = (id?: string) => {
+    // Find the current (first unlocked non-done) lesson if no id given
+    const targetId = id ?? (() => {
+      const first = LEARN_PATH_DEF.find((def, i) => {
+        const done = masteredPhonemes.includes(def.id);
+        const prevDone = i === 0 || masteredPhonemes.includes(LEARN_PATH_DEF[i - 1].id);
+        return !done && prevDone;
+      });
+      return first?.id ?? "sh-sound";
+    })();
+    setCurrentLessonId(targetId);
+    setScreen("lesson");
   };
-  const handleStartLesson = () => setScreen("lesson");
-  const handleLessonDone = () => {
-    setTab("home");
-    setScreen("home");
+
+  const handleLessonDone = (lessonId: string) => {
+    if (lessonId && !masteredPhonemes.includes(lessonId)) {
+      const lesson = LESSONS[lessonId];
+      if (lesson) completeLesson(lessonId, lesson.xpReward);
+    }
+    setTab("learn");
+    setScreen("learn");
   };
+
   return (
     <div
       style={{
@@ -2367,9 +2705,9 @@ export default function App() {
         }}>
           {screen === "splash" && <SplashScreen onNext={() => setScreen("onboard")} />}
           {screen === "onboard" && <OnboardingFlow onDone={() => { setScreen("home"); setTab("home"); }} />}
-          {screen === "home" && <HomeScreen onStartLesson={handleStartLesson} onTabChange={handleTabChange} />}
-          {screen === "learn" && <LearnScreen onStartLesson={handleStartLesson} />}
-          {screen === "lesson" && <LessonScreen onDone={handleLessonDone} />}
+          {screen === "home" && <HomeScreen onStartLesson={() => handleStartLesson()} onTabChange={handleTabChange} />}
+          {screen === "learn" && <LearnScreen onStartLesson={(id) => handleStartLesson(id)} />}
+          {screen === "lesson" && <LessonScreen onDone={handleLessonDone} lessonId={currentLessonId} />}
           {screen === "progress" && <ProgressScreen />}
           {screen === "rewards" && <RewardsScreen />}
           {screen === "profile" && <ProfileScreen />}

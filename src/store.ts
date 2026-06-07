@@ -29,9 +29,9 @@ export const useStore = create<State>()(
       textSize: "medium",
       bgTint: 0,
       streak: 7,
-      xp: 2340,
-      lessonsCompleted: 8,
-      masteredPhonemes: ["short-a", "short-e", "short-i"],
+      xp: 105,
+      lessonsCompleted: 0,
+      masteredPhonemes: [],
       onboarded: false,
       set: (patch) => set(patch),
       addXp: (n) => set((s) => ({ xp: s.xp + n })),
@@ -54,7 +54,7 @@ export const useStore = create<State>()(
         }),
     }),
     {
-      name: "lexio-v3",
+      name: "lexio-v4",
       storage: createJSONStorage(() => localStorage),
     }
   )
