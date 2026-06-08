@@ -983,6 +983,15 @@ function HomeScreen({ onStartLesson, onTabChange }: {
   const name = useStore(s => s.name) || "friend";
   const streak = useStore(s => s.streak);
   const masteredPhonemes = useStore(s => s.masteredPhonemes);
+
+  // Find the current active lesson for dynamic Word of the Day
+  const currentLessonDef = LEARN_PATH_DEF.find((def, i) => {
+    const done = masteredPhonemes.includes(def.id);
+    const prevDone = i === 0 || masteredPhonemes.includes(LEARN_PATH_DEF[i - 1].id);
+    return !done && prevDone;
+  }) ?? LEARN_PATH_DEF[0];
+  const currentLesson = LESSONS[currentLessonDef.id] ?? LESSONS["m-sound"];
+
   const pathNodes = LEARN_PATH_DEF.slice(0, 4).map((def, i) => {
     const done = masteredPhonemes.includes(def.id);
     const prevDone = i === 0 || masteredPhonemes.includes(LEARN_PATH_DEF[i - 1].id);
@@ -1049,6 +1058,9 @@ function HomeScreen({ onStartLesson, onTabChange }: {
           <Play size={22} fill="white" />
           Start Today's Session
         </PrimaryBtn>
+        <div style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: C.muted, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+          <Clock size={12} color={C.muted} /> About 10 minutes · One lesson at a time
+        </div>
       </div>
       {/* Today's Path */}
       <div className="px-6 pb-3">
@@ -1087,7 +1099,7 @@ function HomeScreen({ onStartLesson, onTabChange }: {
           </div>
         </Card>
       </div>
-      {/* Word of the Day */}
+      {/* Word of the Day — dynamic based on current lesson */}
       <div className="px-6 pb-6">
         <div style={{ fontSize: 16, fontWeight: 700, color: C.ink, marginBottom: 12 }}>Word of the Day</div>
         <Card className="p-5" style={{ background: `linear-gradient(135deg, ${C.primarySoft}, #F8F5FF)` }}>
@@ -1097,15 +1109,17 @@ function HomeScreen({ onStartLesson, onTabChange }: {
                 fontFamily: dyslexicFont, fontSize: 40, fontWeight: 700,
                 color: C.primary, letterSpacing: 2, lineHeight: 1.2
               }}>
-                ship
+                {currentLesson.word.startsWith(currentLesson.phoneme.toLowerCase())
+                  ? <><span style={{ color: C.teal }}>{currentLesson.phoneme}</span>{currentLesson.word.slice(currentLesson.phoneme.length)}</>
+                  : currentLesson.word}
               </div>
               <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>
-                A big boat that sails the sea ⛵
+                {currentLesson.wordEmoji} · Focus sound: <strong style={{ color: C.teal }}>{currentLesson.phoneme}</strong>
               </div>
             </div>
             <motion.button
               whileTap={{ scale: 0.88 }}
-              onClick={() => speakLesson("sh", "ship")}
+              onClick={() => speakLesson(currentLesson.phoneme.toLowerCase(), currentLesson.word)}
               style={{
                 width: 56, height: 56, borderRadius: 28,
                 background: C.primary, display: "flex", alignItems: "center", justifyContent: "center",
@@ -1117,16 +1131,22 @@ function HomeScreen({ onStartLesson, onTabChange }: {
             </motion.button>
           </div>
           <div className="flex gap-2 mt-4">
-            {["sh", "i", "p"].map((p, i) => (
-              <div key={i} style={{
-                padding: "4px 12px", borderRadius: 8,
-                background: i === 0 ? C.teal : C.white,
-                color: i === 0 ? "white" : C.muted,
-                fontSize: 14, fontWeight: 600, fontFamily: dyslexicFont
-              }}>
-                {p}
-              </div>
-            ))}
+            {currentLesson.phonemeParts.length > 0
+              ? currentLesson.phonemeParts.map((p, i) => (
+                <motion.button key={i} whileTap={{ scale: 0.92 }} onClick={() => speakPhoneme(p.letters)}
+                  style={{ padding: "4px 12px", borderRadius: 8, background: p.highlight ? C.teal : C.white, color: p.highlight ? "white" : C.muted, fontSize: 14, fontWeight: 600, fontFamily: dyslexicFont, border: "none", cursor: "pointer" }}>
+                  {p.letters}
+                </motion.button>
+              ))
+              : currentLesson.buildSlots.map((p, i) => (
+                <div key={i} style={{ padding: "4px 12px", borderRadius: 8, background: i === 0 ? C.teal : C.white, color: i === 0 ? "white" : C.muted, fontSize: 14, fontWeight: 600, fontFamily: dyslexicFont }}>
+                  {p}
+                </div>
+              ))
+            }
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
+            <Volume2 size={11} color={C.muted} /> Tap a tile to hear that sound
           </div>
         </Card>
       </div>
@@ -1745,14 +1765,14 @@ function SayItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData 
         {micState === "encourage" && (() => {
           const bg = denied ? C.amberSoft : matched ? C.tealSoft : C.amberSoft;
           const accent = denied ? C.amber : matched ? C.teal : C.amber;
-          const title = denied ? "No worries!" : matched ? "Perfect! 🌟" : "Almost!";
+          const title = denied ? "No worries! 👍" : matched ? "Great job! 🌟" : "Nice try! 🎉";
           const sub = denied
             ? "We need mic access to hear you. Tap Continue when you're ready."
             : matched
-              ? `Bubble heard you say "${TARGET_WORD_SAY}"!`
+              ? `Bubble heard you say "${TARGET_WORD_SAY}"! That was perfect.`
               : srSupported
-                ? `Let's try that sound again — say "${TARGET_WORD_SAY}".`
-                : "Bubble heard you! Keep practicing.";
+                ? `You're getting it! Try saying "${TARGET_WORD_SAY}" one more time — you've got this.`
+                : "Keep practicing — every try makes you better!";
           return (
             <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
               <Card className="w-full p-4" style={{ background: bg, textAlign: "center" }}>
@@ -1878,6 +1898,7 @@ function BuildItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonDat
   const slots = useMemo(() => lesson.buildSlots, [lesson]);
   const [filled, setFilled] = useState<(null | { tileIdx: number; letter: string })[]>(() => new Array(lesson.buildSlots.length).fill(null));
   const [shake, setShake] = useState(false);
+  const [wrongHint, setWrongHint] = useState<string | null>(null);
   const isCorrect = filled.every(f => f !== null);
   useEffect(() => {
     if (isCorrect) {
@@ -1890,7 +1911,13 @@ function BuildItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonDat
     if (filled[slotIdx]) return false;
     if (item.letter !== slots[slotIdx]) {
       setShake(true);
-      setTimeout(() => setShake(false), 400);
+      const hints = [
+        "Try a different sound! You're so close.",
+        "Keep going — find the right spot!",
+        "Almost! Listen to the sound again.",
+      ];
+      setWrongHint(hints[Math.floor(Math.random() * hints.length)]);
+      setTimeout(() => { setShake(false); setWrongHint(null); }, 1600);
       return false;
     }
     setFilled(prev => {
@@ -1938,6 +1965,14 @@ function BuildItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonDat
             style={{ fontSize: 22, fontWeight: 700, color: C.teal, textAlign: "center" }}
           >
             ✦ Perfect! You built it! ✦
+          </motion.div>
+        )}
+        {wrongHint && !isCorrect && (
+          <motion.div
+            initial={{ y: 6, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+            style={{ background: C.amberSoft, color: C.amber, padding: "8px 16px", borderRadius: 14, fontSize: 13, fontWeight: 700, textAlign: "center" }}
+          >
+            {wrongHint}
           </motion.div>
         )}
         {/* Tile bank (draggable) */}
@@ -2037,19 +2072,42 @@ function WinScreen({ onDone, variant = "small", lesson }: { onDone: () => void; 
             </Card>
           ))}
         </div>
-        {/* Phoneme mastered chip */}
+        {/* What you learned */}
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.8, type: "spring" }}
-          style={{
-            background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
-            borderRadius: 24, padding: "8px 20px",
-            display: "flex", alignItems: "center", gap: 8,
-          }}
+          style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}
         >
-          <Check size={16} color="white" />
-          <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{lesson?.phoneme ?? "Lesson"} — Mastered!</span>
+          <div style={{
+            background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+            borderRadius: 20, padding: "12px 20px",
+            display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <Check size={18} color="white" />
+            <div>
+              <div style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{lesson?.phoneme ?? "Lesson"} — Skill Unlocked! ✦</div>
+              {lesson && !lesson.isBoss && (
+                <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 }}>
+                  You can now read words like: {lesson.buildSlots.join(" · ")} sounds in "{lesson.word}"
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Share with teacher nudge */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.2 }}
+            style={{
+              background: C.amberSoft, borderRadius: 16, padding: "10px 16px",
+              display: "flex", alignItems: "center", gap: 10,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>📋</span>
+            <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.5 }}>
+              <strong>For your teacher:</strong> Share your progress report from the Profile tab — great for IEP meetings!
+            </div>
+          </motion.div>
         </motion.div>
       </div>
       <PrimaryBtn onClick={onDone} className="w-full text-xl z-10">
@@ -2134,17 +2192,30 @@ const masteredWords = ["ship", "chat", "thin", "shop", "chin", "them", "shed", "
 
 function ProgressScreen() {
   const maxXP = Math.max(...weekData.map(d => d.xp));
+  const masteredPhonemes = useStore(s => s.masteredPhonemes);
+  const lessonsCompleted = useStore(s => s.lessonsCompleted);
+
+  // Build skill milestone list from path
+  const skillMilestones = LEARN_PATH_DEF.filter(n => !n.boss).map((def, i) => {
+    const done = masteredPhonemes.includes(def.id);
+    const prevDone = i === 0 || masteredPhonemes.includes(LEARN_PATH_DEF.filter(n => !n.boss)[i - 1]?.id ?? "");
+    const current = !done && prevDone;
+    const locked = !done && !prevDone;
+    return { ...def, done, current, locked };
+  });
+  const masteredCount = skillMilestones.filter(s => s.done).length;
+
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ fontFamily: uiFont, background: C.bg }}>
       <div className="px-6 pt-14 pb-4">
         <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Your Progress</div>
-        <div style={{ fontSize: 14, color: C.muted }}>This week</div>
+        <div style={{ fontSize: 14, color: C.muted }}>This week · {masteredCount} sounds mastered</div>
       </div>
       {/* Summary row */}
       <div className="px-6 flex gap-3 pb-5">
         {[
-          { label: "Words", value: "12", icon: "📖", color: C.primary },
-          { label: "Minutes", value: "38", icon: "⏱", color: C.teal },
+          { label: "Sounds", value: String(masteredCount), icon: "🔤", color: C.primary },
+          { label: "Lessons", value: String(lessonsCompleted), icon: "📖", color: C.teal },
           { label: "Accuracy", value: "91%", icon: "🎯", color: C.amber },
         ].map(s => (
           <Card key={s.label} className="flex-1 p-3 flex flex-col items-center gap-1">
@@ -2153,6 +2224,26 @@ function ProgressScreen() {
             <div style={{ fontSize: 10, color: C.muted }}>{s.label}</div>
           </Card>
         ))}
+      </div>
+      {/* Skill milestones — for IEP/parent reports */}
+      <div className="px-6 pb-5">
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, marginBottom: 4 }}>Phonics Skills Report</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Share this with your teacher or at IEP meetings 📋</div>
+        <Card className="p-4 flex flex-col gap-2">
+          {skillMilestones.slice(0, 8).map(s => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 12, background: s.done ? C.tealSoft : s.current ? C.primarySoft : "#F5F4F8" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: s.done ? C.teal : s.current ? C.primary : C.muted }}>{s.label}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: s.done ? C.teal : s.current ? C.primary : "#E5E3EF", color: s.done || s.current ? "white" : C.muted }}>
+                {s.done ? "Mastered ✓" : s.current ? "In Progress →" : "🔒 Locked"}
+              </div>
+            </div>
+          ))}
+          {skillMilestones.length > 8 && (
+            <div style={{ fontSize: 12, color: C.muted, textAlign: "center", paddingTop: 4 }}>
+              +{skillMilestones.length - 8} more skills coming up
+            </div>
+          )}
+        </Card>
       </div>
       {/* XP Bar chart */}
       <div className="px-6 pb-5">
@@ -2384,7 +2475,7 @@ const bgTints = [
   { label: "Rose", value: "#FFF0F4" },
 ];
 
-function ProfileScreen() {
+function ProfileScreen({ onRestart }: { onRestart: () => void }) {
   const name = useStore(s => s.name) || "Friend";
   const textSize = useStore(s => s.textSize);
   const selectedBg = useStore(s => s.bgTint);
@@ -2394,9 +2485,11 @@ function ProfileScreen() {
   const lessonsCompleted = useStore(s => s.lessonsCompleted);
   const masteredCount = useStore(s => s.masteredPhonemes.length);
   const setStore = useStore(s => s.set);
+  const reset = useStore(s => s.reset);
   const setTextSize = (v: "small" | "medium" | "large") => setStore({ textSize: v });
   const setSelectedBg = (v: number) => setStore({ bgTint: v });
   const setSelectedMascot = (v: number) => setStore({ activeMascot: v });
+  const [confirmReset, setConfirmReset] = useState(false);
   const mascots = [Lexi, Echo, Glow, Bubble, Brick];
   const MascotComp = mascots[selectedMascot];
   return (
@@ -2530,19 +2623,74 @@ function ProfileScreen() {
         </Card>
       </div>
       {/* Parent section */}
-      <div className="px-6 pb-10">
-        <Card className="p-5 flex items-center justify-between" style={{ background: C.amberSoft }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Parent Dashboard</div>
-            <div style={{ fontSize: 12, color: C.muted }}>Detailed progress & settings</div>
+      <div className="px-6 pb-5">
+        <Card className="p-5" style={{ background: C.amberSoft }}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>For Parents & Teachers</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Skill milestones · IEP-ready report</div>
+            </div>
+            <div style={{ width: 44, height: 44, borderRadius: 22, background: C.amber, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Shield size={22} color="white" />
+            </div>
           </div>
-          <div style={{
-            width: 44, height: 44, borderRadius: 22,
-            background: C.amber, display: "flex", alignItems: "center", justifyContent: "center"
-          }}>
-            <Shield size={22} color="white" />
+          <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.6 }}>
+            See the <strong>Progress</strong> tab for a full phonics skills report — shows exactly which sounds your child has mastered vs. still working on. Great for IEP and 504 meetings.
           </div>
         </Card>
+      </div>
+      {/* Demo restart */}
+      <div className="px-6 pb-10">
+        {!confirmReset ? (
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={() => setConfirmReset(true)}
+            style={{
+              width: "100%", padding: "12px", borderRadius: 16,
+              background: "transparent", border: `2px dashed ${C.muted}`,
+              color: C.muted, fontSize: 13, fontWeight: 600,
+              fontFamily: uiFont, cursor: "pointer",
+            }}
+          >
+            🔄 Restart Demo
+          </motion.button>
+        ) : (
+          <Card className="p-4 flex flex-col gap-3" style={{ background: "#FFF0F0" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, textAlign: "center" }}>
+              Reset everything and start from the beginning?
+            </div>
+            <div className="flex gap-3">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  reset();
+                  setStore({ masteredPhonemes: [], xp: 0, lessonsCompleted: 0, streak: 0 });
+                  onRestart();
+                }}
+                style={{
+                  flex: 1, padding: "10px", borderRadius: 12,
+                  background: "#FF4D4D", color: "white",
+                  fontSize: 13, fontWeight: 700, fontFamily: uiFont,
+                  border: "none", cursor: "pointer",
+                }}
+              >
+                Yes, reset
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setConfirmReset(false)}
+                style={{
+                  flex: 1, padding: "10px", borderRadius: 12,
+                  background: C.primarySoft, color: C.primary,
+                  fontSize: 13, fontWeight: 700, fontFamily: uiFont,
+                  border: "none", cursor: "pointer",
+                }}
+              >
+                Cancel
+              </motion.button>
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );
@@ -2710,7 +2858,7 @@ export default function App() {
           {screen === "lesson" && <LessonScreen onDone={handleLessonDone} lessonId={currentLessonId} />}
           {screen === "progress" && <ProgressScreen />}
           {screen === "rewards" && <RewardsScreen />}
-          {screen === "profile" && <ProfileScreen />}
+          {screen === "profile" && <ProfileScreen onRestart={() => setScreen("splash")} />}
         </div>
         {/* Tab bar */}
         {showTabs && (
