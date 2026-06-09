@@ -14,6 +14,8 @@ type State = {
   lessonsCompleted: number;
   masteredPhonemes: string[];
   onboarded: boolean;
+  weeklyDigest: boolean;
+  parentEmail: string;
   set: (patch: Partial<Omit<State, "set" | "addXp" | "completeLesson" | "reset">>) => void;
   addXp: (n: number) => void;
   completeLesson: (phoneme: string, xp: number) => void;
@@ -33,6 +35,8 @@ export const useStore = create<State>()(
       lessonsCompleted: 0,
       masteredPhonemes: [],
       onboarded: false,
+      weeklyDigest: false,
+      parentEmail: "",
       set: (patch) => set(patch),
       addXp: (n) => set((s) => ({ xp: s.xp + n })),
       completeLesson: (phoneme, xp) =>

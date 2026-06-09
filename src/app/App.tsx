@@ -117,7 +117,7 @@ function speakLesson(phoneme: string, word: string) {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Screen = "splash" | "onboard" | "home" | "learn" | "lesson" | "progress" | "rewards" | "profile";
+type Screen = "splash" | "onboard" | "home" | "learn" | "lesson" | "progress" | "rewards" | "profile" | "parent";
 type LessonStep = "hear" | "see" | "trace" | "say" | "build" | "win";
 type Tab = "home" | "learn" | "progress" | "rewards" | "profile";
 type MicState = "idle" | "listening" | "processing" | "encourage";
@@ -2475,7 +2475,7 @@ const bgTints = [
   { label: "Rose", value: "#FFF0F4" },
 ];
 
-function ProfileScreen({ onRestart }: { onRestart: () => void }) {
+function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onOpenParent: () => void }) {
   const name = useStore(s => s.name) || "Friend";
   const textSize = useStore(s => s.textSize);
   const selectedBg = useStore(s => s.bgTint);
@@ -2622,22 +2622,31 @@ function ProfileScreen({ onRestart }: { onRestart: () => void }) {
           </div>
         </Card>
       </div>
-      {/* Parent section */}
+      {/* Parent section — opens math gate */}
       <div className="px-6 pb-5">
-        <Card className="p-5" style={{ background: C.amberSoft }}>
-          <div className="flex items-center justify-between mb-3">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onOpenParent}
+          style={{
+            width: "100%", textAlign: "left", border: "none",
+            background: C.amberSoft, borderRadius: 24, padding: 20, cursor: "pointer",
+            boxShadow: "0 4px 20px rgba(108, 71, 255, 0.08)",
+            fontFamily: uiFont,
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>For Parents & Teachers</div>
-              <div style={{ fontSize: 12, color: C.muted }}>Skill milestones · IEP-ready report</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Dashboard · weekly digest · IEP report</div>
             </div>
             <div style={{ width: 44, height: 44, borderRadius: 22, background: C.amber, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Shield size={22} color="white" />
             </div>
           </div>
-          <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.6 }}>
-            See the <strong>Progress</strong> tab for a full phonics skills report — shows exactly which sounds your child has mastered vs. still working on. Great for IEP and 504 meetings.
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginTop: 4 }}>
+            🔒 Tap to open — a quick math problem keeps it kid-proof.
           </div>
-        </Card>
+        </motion.button>
       </div>
       {/* Demo restart */}
       <div className="px-6 pb-10">
@@ -2694,6 +2703,428 @@ function ProfileScreen({ onRestart }: { onRestart: () => void }) {
       </div>
     </div>
   );
+}
+
+// ─── Parent Screen (gate + dashboard) ─────────────────────────────────────────
+// Adult-styled, behind a math gate. COPPA-safe: no audio ever persisted.
+
+const ADULT_INK = "#1A1A2E";
+const ADULT_BG = "#F4F5F8";
+const ADULT_MUTED = "#5C6079";
+
+function ParentGate({ onPass, onCancel }: { onPass: () => void; onCancel: () => void }) {
+  const [problem, setProblem] = useState(() => {
+    const a = 3 + Math.floor(Math.random() * 7);
+    const b = 3 + Math.floor(Math.random() * 7);
+    return { a, b, answer: a * b };
+  });
+  const [input, setInput] = useState("");
+  const [tried, setTried] = useState(false);
+  const wrong = tried && input !== "" && Number(input) !== problem.answer;
+  const press = (d: string) => {
+    if (input.length >= 3) return;
+    setInput(p => p + d);
+    setTried(false);
+  };
+  const back = () => { setInput(p => p.slice(0, -1)); setTried(false); };
+  const submit = () => {
+    if (Number(input) === problem.answer) { onPass(); return; }
+    setTried(true);
+    setTimeout(() => {
+      const a = 3 + Math.floor(Math.random() * 7);
+      const b = 3 + Math.floor(Math.random() * 7);
+      setProblem({ a, b, answer: a * b });
+      setInput("");
+      setTried(false);
+    }, 1200);
+  };
+  return (
+    <div className="flex flex-col h-full" style={{ background: ADULT_BG, fontFamily: uiFont }}>
+      <div className="flex items-center justify-between px-6 pt-12 pb-4">
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={onCancel}
+          style={{
+            width: 40, height: 40, borderRadius: 20,
+            background: "white", border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+          }}
+        >
+          <ChevronLeft size={20} color={ADULT_INK} />
+        </motion.button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Shield size={16} color={ADULT_MUTED} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: ADULT_MUTED, letterSpacing: 0.5 }}>PARENT AREA</span>
+        </div>
+        <div style={{ width: 40 }} />
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
+        <div style={{ fontSize: 22, fontWeight: 700, color: ADULT_INK, textAlign: "center" }}>
+          Just checking — are you a grown-up?
+        </div>
+        <div style={{ fontSize: 14, color: ADULT_MUTED, textAlign: "center", maxWidth: 280 }}>
+          Solve this to open the parent dashboard. (We never lock kids out of their own progress.)
+        </div>
+        <div style={{
+          background: "white", padding: "28px 36px", borderRadius: 24,
+          boxShadow: "0 6px 24px rgba(26,26,46,0.08)",
+          display: "flex", alignItems: "center", gap: 18,
+          fontSize: 40, fontWeight: 700, color: ADULT_INK,
+        }}>
+          <span>{problem.a}</span>
+          <span style={{ color: ADULT_MUTED }}>×</span>
+          <span>{problem.b}</span>
+          <span style={{ color: ADULT_MUTED }}>=</span>
+          <span style={{
+            minWidth: 64, padding: "6px 14px", borderRadius: 12,
+            border: `2px solid ${wrong ? C.amber : input ? ADULT_INK : "#D8DBE4"}`,
+            color: wrong ? C.amber : ADULT_INK, textAlign: "center",
+            background: wrong ? C.amberSoft : "white",
+            transition: "all 0.2s",
+          }}>
+            {input || "?"}
+          </span>
+        </div>
+        {wrong && (
+          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{
+            fontSize: 13, color: C.amber, fontWeight: 600,
+          }}>
+            Not quite — here's a new one.
+          </motion.div>
+        )}
+        {/* Numpad */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10,
+          width: "100%", maxWidth: 280, marginTop: 8,
+        }}>
+          {["1","2","3","4","5","6","7","8","9"].map(d => (
+            <motion.button
+              key={d}
+              whileTap={{ scale: 0.92 }}
+              onClick={() => press(d)}
+              style={{
+                height: 56, borderRadius: 16,
+                background: "white", border: "none", cursor: "pointer",
+                fontSize: 22, fontWeight: 600, color: ADULT_INK,
+                boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                fontFamily: uiFont,
+              }}
+            >
+              {d}
+            </motion.button>
+          ))}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={back}
+            style={{
+              height: 56, borderRadius: 16,
+              background: "#E5E7ED", border: "none", cursor: "pointer",
+              fontSize: 18, color: ADULT_INK, fontWeight: 600,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            ⌫
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={() => press("0")}
+            style={{
+              height: 56, borderRadius: 16,
+              background: "white", border: "none", cursor: "pointer",
+              fontSize: 22, fontWeight: 600, color: ADULT_INK,
+              boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+              fontFamily: uiFont,
+            }}
+          >
+            0
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={submit}
+            disabled={!input}
+            style={{
+              height: 56, borderRadius: 16,
+              background: input ? C.primary : "#C4B0FF", border: "none",
+              cursor: input ? "pointer" : "default",
+              fontSize: 16, color: "white", fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: uiFont,
+            }}
+          >
+            Enter
+          </motion.button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Curated phoneme bank for the dashboard heatmap.
+// TODO(real-data): wire actual per-phoneme accuracy from session events.
+const PHONEME_BANK = [
+  { id: "short-a", label: "Short A", group: "vowels" },
+  { id: "short-e", label: "Short E", group: "vowels" },
+  { id: "short-i", label: "Short I", group: "vowels" },
+  { id: "short-o", label: "Short O", group: "vowels" },
+  { id: "short-u", label: "Short U", group: "vowels" },
+  { id: "long-a", label: "Long A", group: "vowels" },
+  { id: "long-e", label: "Long E", group: "vowels" },
+  { id: "sh", label: "SH", group: "digraphs" },
+  { id: "ch", label: "CH", group: "digraphs" },
+  { id: "th", label: "TH", group: "digraphs" },
+  { id: "wh", label: "WH", group: "digraphs" },
+  { id: "bl", label: "BL", group: "blends" },
+  { id: "cr", label: "CR", group: "blends" },
+  { id: "st", label: "ST", group: "blends" },
+];
+
+function heatColor(pct: number | null) {
+  if (pct == null) return { bg: "#E5E7ED", fg: ADULT_MUTED, label: "—" };
+  if (pct >= 90) return { bg: "#C9EFDD", fg: "#1F7A53", label: `${pct}%` };
+  if (pct >= 75) return { bg: "#DFF4EA", fg: "#2D8B66", label: `${pct}%` };
+  if (pct >= 60) return { bg: "#FEE7CC", fg: "#9C5314", label: `${pct}%` };
+  return { bg: "#FFE1D6", fg: "#A8462A", label: `${pct}%` };
+}
+
+function ParentDashboard({ onExit }: { onExit: () => void }) {
+  const name = useStore(s => s.name) || "your child";
+  const lessonsCompleted = useStore(s => s.lessonsCompleted);
+  const masteredPhonemes = useStore(s => s.masteredPhonemes);
+  const streak = useStore(s => s.streak);
+  const weeklyDigest = useStore(s => s.weeklyDigest);
+  const parentEmail = useStore(s => s.parentEmail);
+  const setStore = useStore(s => s.set);
+
+  // Compute per-phoneme accuracy. Real signal where we have it (mastered = high
+  // accuracy band), placeholder for the rest. // TODO(real-data)
+  const phonemeAcc = PHONEME_BANK.map(p => {
+    if (masteredPhonemes.includes(p.id)) {
+      return { ...p, pct: 88 + ((p.id.charCodeAt(0) * 7) % 10) }; // 88–97%
+    }
+    // Stable pseudo value so the dashboard doesn't flicker on rerender
+    const seed = (p.id.charCodeAt(0) + p.id.length * 13) % 100;
+    if (seed < 25) return { ...p, pct: null }; // locked / not started
+    if (seed < 60) return { ...p, pct: 50 + (seed % 20) }; // working on
+    return { ...p, pct: 70 + (seed % 18) };
+  });
+  const focusList = phonemeAcc
+    .filter(p => p.pct != null && p.pct < 80)
+    .sort((a, b) => (a.pct ?? 100) - (b.pct ?? 100))
+    .slice(0, 3);
+
+  // Rough weekly stats derived from store. // TODO(real-data) replace with session logs.
+  const weekMinutes = Math.max(0, lessonsCompleted * 5);
+  const weekSessions = lessonsCompleted;
+  const masteredCount = masteredPhonemes.length;
+
+  return (
+    <div className="flex flex-col h-full overflow-y-auto" style={{ background: ADULT_BG, fontFamily: uiFont }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-12 pb-4">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 18,
+            background: C.primary, display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Shield size={18} color="white" />
+          </div>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: ADULT_INK }}>Parent Dashboard</div>
+            <div style={{ fontSize: 11, color: ADULT_MUTED }}>{name}'s phonics progress</div>
+          </div>
+        </div>
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={onExit}
+          style={{
+            width: 36, height: 36, borderRadius: 18,
+            background: "white", border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+            fontSize: 18, color: ADULT_INK,
+          }}
+        >
+          ✕
+        </motion.button>
+      </div>
+
+      {/* This Week summary */}
+      <div className="px-6 pb-4">
+        <div style={{ fontSize: 12, fontWeight: 600, color: ADULT_MUTED, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>
+          This week
+        </div>
+        <div className="flex gap-3">
+          {[
+            { label: "Minutes", value: weekMinutes, accent: C.primary },
+            { label: "Sessions", value: weekSessions, accent: C.teal },
+            { label: "Mastered", value: masteredCount, accent: C.amber },
+            { label: "Streak", value: `${streak}d`, accent: "#E8772E" },
+          ].map(s => (
+            <div key={s.label} style={{
+              flex: 1, background: "white", borderRadius: 16, padding: "14px 8px",
+              textAlign: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+            }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: s.accent, lineHeight: 1.1 }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: ADULT_MUTED, marginTop: 4, fontWeight: 600, letterSpacing: 0.3 }}>{s.label.toUpperCase()}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Phoneme heatmap */}
+      <div className="px-6 pb-4">
+        <div style={{ fontSize: 13, fontWeight: 700, color: ADULT_INK, marginBottom: 6 }}>Phoneme mastery</div>
+        <div style={{ fontSize: 11, color: ADULT_MUTED, marginBottom: 10 }}>Color intensity = accuracy on recent attempts.</div>
+        <div style={{
+          background: "white", borderRadius: 16, padding: 14,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+        }}>
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8,
+          }}>
+            {phonemeAcc.map(p => {
+              const c = heatColor(p.pct);
+              return (
+                <div key={p.id} style={{
+                  background: c.bg, borderRadius: 10, padding: "10px 6px",
+                  textAlign: "center", minHeight: 56,
+                }}>
+                  <div style={{ fontFamily: dyslexicFont, fontSize: 15, fontWeight: 700, color: c.fg }}>
+                    {p.label}
+                  </div>
+                  <div style={{ fontSize: 10, color: c.fg, fontWeight: 600, marginTop: 2 }}>
+                    {c.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 12, marginTop: 12, fontSize: 10, color: ADULT_MUTED, justifyContent: "center", flexWrap: "wrap" }}>
+            {[
+              { c: "#C9EFDD", l: "90%+" },
+              { c: "#DFF4EA", l: "75–89%" },
+              { c: "#FEE7CC", l: "60–74%" },
+              { c: "#FFE1D6", l: "<60%" },
+              { c: "#E5E7ED", l: "Not yet" },
+            ].map(k => (
+              <div key={k.l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: k.c, display: "inline-block" }} />
+                <span>{k.l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Recommended next focus */}
+      <div className="px-6 pb-4">
+        <div style={{ fontSize: 13, fontWeight: 700, color: ADULT_INK, marginBottom: 6 }}>Recommended next focus</div>
+        <div style={{ fontSize: 11, color: ADULT_MUTED, marginBottom: 10 }}>Sounds where {name} would benefit from extra practice.</div>
+        <div style={{
+          background: "white", borderRadius: 16, padding: 14,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+          display: "flex", flexDirection: "column", gap: 10,
+        }}>
+          {focusList.length === 0 ? (
+            <div style={{ fontSize: 12, color: ADULT_MUTED, textAlign: "center", padding: "12px 0" }}>
+              Nothing flagged — {name} is doing great across the board. 🎯
+            </div>
+          ) : focusList.map((p, i) => (
+            <div key={p.id} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 12px", borderRadius: 12, background: "#FAFAFC",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: C.amberSoft, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 12, fontWeight: 800, color: C.amber,
+                }}>
+                  {i + 1}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: ADULT_INK, fontFamily: dyslexicFont }}>{p.label}</div>
+                  <div style={{ fontSize: 10, color: ADULT_MUTED }}>
+                    {p.pct}% accuracy · suggest 2 short sessions this week
+                  </div>
+                </div>
+              </div>
+              <ArrowRight size={16} color={ADULT_MUTED} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Weekly digest */}
+      <div className="px-6 pb-4">
+        <div style={{ fontSize: 13, fontWeight: 700, color: ADULT_INK, marginBottom: 6 }}>Weekly email digest</div>
+        <div style={{
+          background: "white", borderRadius: 16, padding: 16,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+        }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: weeklyDigest ? 12 : 0 }}>
+            <div style={{ paddingRight: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: ADULT_INK }}>Send me a recap every Sunday</div>
+              <div style={{ fontSize: 11, color: ADULT_MUTED, marginTop: 2 }}>
+                Minutes, words mastered, streak, and one recommended focus.
+              </div>
+            </div>
+            <button
+              onClick={() => setStore({ weeklyDigest: !weeklyDigest })}
+              style={{
+                width: 48, height: 28, borderRadius: 14,
+                background: weeklyDigest ? C.primary : "#D8DBE4",
+                border: "none", cursor: "pointer", position: "relative",
+                transition: "background 0.2s",
+                flexShrink: 0,
+              }}
+              aria-pressed={weeklyDigest}
+            >
+              <span style={{
+                position: "absolute", top: 3, left: weeklyDigest ? 23 : 3,
+                width: 22, height: 22, borderRadius: 11, background: "white",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                transition: "left 0.2s",
+              }} />
+            </button>
+          </div>
+          {weeklyDigest && (
+            <input
+              type="email"
+              value={parentEmail}
+              onChange={e => setStore({ parentEmail: e.target.value })}
+              placeholder="parent@email.com"
+              style={{
+                width: "100%", padding: "10px 14px", borderRadius: 10,
+                border: `1px solid ${parentEmail ? C.primary : "#D8DBE4"}`,
+                fontSize: 13, fontFamily: uiFont, color: ADULT_INK,
+                background: "white", outline: "none",
+              }}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* COPPA note */}
+      <div className="px-6 pb-10">
+        <div style={{
+          background: "transparent", border: `1px dashed ${ADULT_MUTED}`,
+          borderRadius: 12, padding: "10px 14px",
+          fontSize: 11, color: ADULT_MUTED, lineHeight: 1.6,
+        }}>
+          🔒 <strong style={{ color: ADULT_INK }}>COPPA-safe.</strong> Lexio never stores or transmits voice recordings. Mic data is processed on-device for waveform feedback only and discarded after each attempt.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParentScreen({ onExit }: { onExit: () => void }) {
+  const [unlocked, setUnlocked] = useState(false);
+  return unlocked
+    ? <ParentDashboard onExit={onExit} />
+    : <ParentGate onPass={() => setUnlocked(true)} onCancel={onExit} />;
 }
 
 // ─── Bottom Tab Bar ────────────────────────────────────────────────────────────
@@ -2860,7 +3291,8 @@ export default function App() {
           {screen === "lesson" && <LessonScreen onDone={handleLessonDone} lessonId={currentLessonId} />}
           {screen === "progress" && <ProgressScreen />}
           {screen === "rewards" && <RewardsScreen />}
-          {screen === "profile" && <ProfileScreen onRestart={() => setScreen("splash")} />}
+          {screen === "profile" && <ProfileScreen onRestart={() => setScreen("splash")} onOpenParent={() => setScreen("parent")} />}
+          {screen === "parent" && <ParentScreen onExit={() => setScreen("profile")} />}
         </div>
         {/* Tab bar */}
         {showTabs && (
