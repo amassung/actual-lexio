@@ -4,6 +4,7 @@ import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { TouchBackend } from "react-dnd-touch-backend";
 import { useStore, type LessonResult, pickWord, WORD_BANK } from "../store";
+import { playTTS, playSequence, cancelTTS } from "../services/tts";
 import { TraceLetter } from "../components/TraceLetter";
 
 const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || (navigator as any).maxTouchPoints > 0);
@@ -46,74 +47,46 @@ const C = {
 const dyslexicFont = "'OpenDyslexic', 'Comic Sans MS', cursive";
 const uiFont = "'Lexend', sans-serif";
 
-// ─── Speech synthesis helper (TTS) ────────────────────────────────────────────
+// ─── Speech helpers ───────────────────────────────────────────────────────────
+// Public surface kept identical to the previous speechSynthesis-only
+// implementation, so existing callers don't need to change. Internals now
+// delegate to services/tts.ts, which prefers Fish Audio and falls back to
+// browser speechSynthesis when the key is missing or the API errors.
 type SpeakOpts = { rate?: number; pitch?: number };
-function pickVoice() {
-  const voices = window.speechSynthesis.getVoices();
-  return voices.find(v => /en-(US|GB)/.test(v.lang) && /(Samantha|Karen|Google US English|Microsoft Aria)/i.test(v.name))
-    || voices.find(v => v.lang.startsWith("en"))
-    || null;
-}
-function utterance(text: string, opts: SpeakOpts = {}) {
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = opts.rate ?? 0.75;
-  u.pitch = opts.pitch ?? 1.1;
-  u.lang = "en-US";
-  const v = pickVoice();
-  if (v) u.voice = v;
-  return u;
-}
 function speak(text: string, opts: SpeakOpts = {}) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  try {
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance(text, opts));
-  } catch {}
+  // Fire-and-forget; promise is intentionally not awaited.
+  void playTTS(text, { rate: opts.rate });
 }
-// Say a single phoneme's sound in isolation, e.g. "sh" → drawn-out "shhhh"
+// Map a written phoneme to a drawn-out sound the TTS can pronounce.
+const PHONEME_MAP: Record<string, { text: string; rate: number }> = {
+  sh: { text: "shhhh", rate: 0.4 },
+  ch: { text: "ch ch ch", rate: 0.45 },
+  th: { text: "thhh", rate: 0.4 },
+  wh: { text: "wh wh", rate: 0.5 },
+  i: { text: "ih", rate: 0.55 },
+  a: { text: "ah", rate: 0.55 },
+  e: { text: "eh", rate: 0.55 },
+  o: { text: "ah", rate: 0.55 },
+  u: { text: "uh", rate: 0.55 },
+  p: { text: "puh", rate: 0.55 },
+  t: { text: "tuh", rate: 0.55 },
+  m: { text: "mmm", rate: 0.5 },
+  s: { text: "sss", rate: 0.5 },
+  n: { text: "nnn", rate: 0.5 },
+  r: { text: "rr", rate: 0.5 },
+};
 function speakPhoneme(letters: string) {
-  const k = letters.toLowerCase();
-  const map: Record<string, { text: string; rate: number }> = {
-    sh: { text: "shhhh", rate: 0.4 },
-    ch: { text: "ch ch ch", rate: 0.45 },
-    th: { text: "thhh", rate: 0.4 },
-    i: { text: "ih", rate: 0.55 },
-    a: { text: "ah", rate: 0.55 },
-    e: { text: "eh", rate: 0.55 },
-    o: { text: "ah", rate: 0.55 },
-    u: { text: "uh", rate: 0.55 },
-    p: { text: "puh", rate: 0.55 },
-    t: { text: "tuh", rate: 0.55 },
-    r: { text: "rr", rate: 0.5 },
-  };
-  const entry = map[k] ?? { text: letters, rate: 0.5 };
-  speak(entry.text, { rate: entry.rate });
+  const entry = PHONEME_MAP[letters.toLowerCase()] ?? { text: letters, rate: 0.55 };
+  void playTTS(entry.text, { rate: entry.rate });
 }
-// Sound out a phoneme + word, e.g. ("sh", "ship") → "shh... shh... ship"
+// Sound out a phoneme + word: "shh… shh… ship". Chained as a real sequence
+// so the next segment only starts after the previous audio finishes.
 function speakLesson(phoneme: string, word: string) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  const synth = window.speechSynthesis;
-  try {
-    synth.cancel();
-    const phonemeText = phoneme.toLowerCase() === "sh" ? "shhhh"
-      : phoneme.toLowerCase() === "ch" ? "chhh"
-      : phoneme.toLowerCase() === "th" ? "thhh"
-      : phoneme;
-    const queue = [
-      utterance(phonemeText, { rate: 0.45, pitch: 1.05 }),
-      utterance(phonemeText, { rate: 0.45, pitch: 1.05 }),
-      utterance(word, { rate: 0.6, pitch: 1.1 }),
-    ];
-    // Chain with small gaps via onend
-    let i = 0;
-    const playNext = () => {
-      if (i >= queue.length) return;
-      const u = queue[i++];
-      u.onend = () => setTimeout(playNext, 220);
-      synth.speak(u);
-    };
-    playNext();
-  } catch {}
+  const phonemeText = PHONEME_MAP[phoneme.toLowerCase()]?.text ?? phoneme;
+  void playSequence(
+    [phonemeText, 220, phonemeText, 260, word],
+    { rate: 0.6 }
+  );
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1353,7 +1326,7 @@ function HearItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData
   }, [lesson]);
   useEffect(() => {
     const t = setTimeout(handlePlay, 450);
-    return () => { clearTimeout(t); window.speechSynthesis?.cancel(); };
+    return () => { clearTimeout(t); cancelTTS(); };
   }, [handlePlay]);
   const wordDisplay = lesson.word.toUpperCase().startsWith(lesson.phoneme.toUpperCase())
     ? <><span style={{ color: C.teal, fontWeight: 700 }}>{lesson.phoneme}</span>{lesson.word.slice(lesson.phoneme.length)}</>
