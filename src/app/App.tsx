@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { TouchBackend } from "react-dnd-touch-backend";
-import { useStore } from "../store";
+import { useStore, type LessonResult, pickWord, WORD_BANK } from "../store";
 import { TraceLetter } from "../components/TraceLetter";
 
 const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || (navigator as any).maxTouchPoints > 0);
@@ -465,6 +465,59 @@ const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x
 ];
 
 // ─── Lexi mascot (lavender, star wand) ───────────────────────────────────────
+// Shared pose decorations — overlay extras on top of every mascot's SVG.
+// Pass each mascot's eye coordinates so sleepy lids land in the right spot.
+function PoseFx({ pose, eyes }: { pose: string; eyes: [number, number][] }) {
+  const thinking = pose === "thinking";
+  const sleepy = pose === "sleepy";
+  const tryAgain = pose === "tryAgain" || pose === "try-again";
+  const levelUp = pose === "levelUp";
+  return (
+    <>
+      {levelUp && (
+        <>
+          <circle cx="50" cy="60" r="56" fill={C.yellow} opacity={0.18} />
+          <circle cx="50" cy="60" r="48" fill={C.amber} opacity={0.12} />
+          <text x="6" y="22" fontSize="14" fill={C.amber}>★</text>
+          <text x="82" y="20" fontSize="14" fill={C.yellow}>★</text>
+          <text x="2" y="68" fontSize="11" fill={C.amber}>✦</text>
+          <text x="86" y="78" fontSize="11" fill={C.yellow}>✦</text>
+          <text x="48" y="6" fontSize="10" fill={C.amber}>✦</text>
+        </>
+      )}
+      {thinking && (
+        <>
+          {/* Thought bubble */}
+          <circle cx="78" cy="14" r="9" fill="white" stroke={C.ink} strokeWidth="1.2" opacity={0.95} />
+          <circle cx="68" cy="26" r="3" fill="white" stroke={C.ink} strokeWidth="1" opacity={0.95} />
+          <circle cx="64" cy="32" r="2" fill="white" stroke={C.ink} strokeWidth="0.9" opacity={0.95} />
+          <text x="74" y="18" fontSize="10" fontWeight="700" fill={C.primary}>?</text>
+        </>
+      )}
+      {sleepy && (
+        <>
+          {/* Half-closed eyelids — cover top half of each eye white */}
+          {eyes.map(([cx, cy], i) => (
+            <rect key={i} x={cx - 10} y={cy - 9} width="20" height="9" rx="9" fill={C.ink} opacity={0.85} />
+          ))}
+          {/* Floating Zzz */}
+          <text x="72" y="14" fontSize="11" fontWeight="700" fill={C.muted}>z</text>
+          <text x="80" y="22" fontSize="13" fontWeight="700" fill={C.muted}>Z</text>
+          <text x="89" y="32" fontSize="15" fontWeight="700" fill={C.muted}>Z</text>
+        </>
+      )}
+      {tryAgain && (
+        <>
+          {/* Gentle encouraging sparkles */}
+          <text x="6" y="32" fontSize="10" fill={C.teal}>✨</text>
+          <text x="84" y="36" fontSize="10" fill={C.amber}>✨</text>
+          <text x="14" y="80" fontSize="8" fill={C.blush}>✨</text>
+        </>
+      )}
+    </>
+  );
+}
+
 function Lexi({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
   const happy = pose === "happy" || pose === "celebrating";
   const s = size / 100;
@@ -508,6 +561,7 @@ function Lexi({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
       {/* Feet */}
       <ellipse cx="38" cy="108" rx="11" ry="7" fill={C.lexiDark} />
       <ellipse cx="62" cy="108" rx="11" ry="7" fill={C.lexiDark} />
+      <PoseFx pose={pose} eyes={[[38, 60], [62, 60]]} />
     </svg>
   );
 }
@@ -549,6 +603,7 @@ function Echo({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
       {/* Feet */}
       <ellipse cx="38" cy="103" rx="11" ry="7" fill={C.echoDark} />
       <ellipse cx="62" cy="103" rx="11" ry="7" fill={C.echoDark} />
+      <PoseFx pose={pose} eyes={[[38, 64], [62, 64]]} />
     </svg>
   );
 }
@@ -591,6 +646,7 @@ function Glow({ size = 100, pose = "idle" }: { size?: number; pose?: string }) {
       {/* Feet */}
       <ellipse cx="38" cy="108" rx="11" ry="7" fill={C.glowDark} />
       <ellipse cx="62" cy="108" rx="11" ry="7" fill={C.glowDark} />
+      <PoseFx pose={pose} eyes={[[33, 63], [67, 63]]} />
     </svg>
   );
 }
@@ -627,6 +683,7 @@ function Bubble({ size = 100, pose = "idle" }: { size?: number; pose?: string })
       {/* Feet */}
       <ellipse cx="38" cy="108" rx="11" ry="7" fill="#E8A0BA" />
       <ellipse cx="62" cy="108" rx="11" ry="7" fill="#E8A0BA" />
+      <PoseFx pose={pose} eyes={[[37, 62], [63, 62]]} />
     </svg>
   );
 }
@@ -665,6 +722,7 @@ function Brick({ size = 100, pose = "idle" }: { size?: number; pose?: string }) 
       {/* Feet */}
       <rect x="24" y="100" width="22" height="14" rx="6" fill="#D8822A" />
       <rect x="54" y="100" width="22" height="14" rx="6" fill="#D8822A" />
+      <PoseFx pose={pose} eyes={[[37, 57], [63, 57]]} />
     </svg>
   );
 }
@@ -676,6 +734,8 @@ function PrimaryBtn({ children, onClick, className = "", disabled = false }: {
   return (
     <motion.button
       whileTap={{ scale: 0.96 }}
+      whileHover={disabled ? undefined : { scale: 1.02, y: -1 }}
+      transition={{ duration: 0.15 }}
       onClick={onClick}
       disabled={disabled}
       className={`flex items-center justify-center gap-2 rounded-2xl font-semibold text-white transition-opacity ${className}`}
@@ -697,6 +757,8 @@ function GhostBtn({ children, onClick, className = "" }: {
   return (
     <motion.button
       whileTap={{ scale: 0.97 }}
+      whileHover={{ scale: 1.02, backgroundColor: C.primarySoft }}
+      transition={{ duration: 0.15 }}
       onClick={onClick}
       className={`flex items-center justify-center gap-2 rounded-2xl font-medium transition-colors ${className}`}
       style={{
@@ -1566,7 +1628,7 @@ function TraceItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonDat
 }
 
 // ─── Lesson: Say It ──────────────────────────────────────────────────────────
-function SayItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData }) {
+function SayItStep({ onNext, lesson, onCorrect, onWrong }: { onNext: () => void; lesson: LessonData; onCorrect?: () => void; onWrong?: () => void }) {
   const TARGET_WORD_SAY = lesson.word;
   const TARGET_ACCEPT = lesson.sayAccept;
   const [micState, setMicState] = useState<MicState>("idle");
@@ -1680,6 +1742,14 @@ function SayItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData 
     matchedRef.current = false;
     setLevels(new Array(10).fill(8));
   };
+  // Emit hit/miss exactly once when entering "encourage" (not on denial)
+  const reportedRef = useRef(false);
+  useEffect(() => {
+    if (micState !== "encourage") { reportedRef.current = false; return; }
+    if (denied || reportedRef.current) return;
+    reportedRef.current = true;
+    if (matched) onCorrect?.(); else onWrong?.();
+  }, [micState, matched, denied, onCorrect, onWrong]);
   const srSupported = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   const micBg = micState === "idle"
     ? `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`
@@ -1701,7 +1771,15 @@ function SayItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData 
       </div>
       <div className="flex flex-col items-center gap-6 w-full">
         <motion.div animate={micState === "encourage" ? { scale: [1, 1.08, 1] } : {}}>
-          <Bubble size={110} pose={micState === "encourage" ? "happy" : "idle"} />
+          <Bubble
+            size={110}
+            pose={
+              micState === "processing" ? "thinking"
+              : denied ? "tryAgain"
+              : micState === "encourage" ? (matched ? "happy" : "tryAgain")
+              : "idle"
+            }
+          />
         </motion.div>
         <div style={{ fontFamily: dyslexicFont, fontSize: 48, color: C.ink, letterSpacing: 3 }}>
           {lesson.word.toUpperCase().startsWith(lesson.phoneme.toUpperCase())
@@ -1894,23 +1972,28 @@ function DropSlot({
   );
 }
 
-function BuildItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonData }) {
+function BuildItStep({ onNext, lesson, onCorrect, onWrong }: { onNext: () => void; lesson: LessonData; onCorrect?: () => void; onWrong?: () => void }) {
   const slots = useMemo(() => lesson.buildSlots, [lesson]);
   const [filled, setFilled] = useState<(null | { tileIdx: number; letter: string })[]>(() => new Array(lesson.buildSlots.length).fill(null));
   const [shake, setShake] = useState(false);
   const [wrongHint, setWrongHint] = useState<string | null>(null);
   const isCorrect = filled.every(f => f !== null);
+  // Emit combo hit once the word is fully built
+  const reportedRef = useRef(false);
   useEffect(() => {
-    if (isCorrect) {
+    if (isCorrect && !reportedRef.current) {
+      reportedRef.current = true;
+      onCorrect?.();
       const t = setTimeout(onNext, 1800);
       return () => clearTimeout(t);
     }
-  }, [isCorrect, onNext]);
+  }, [isCorrect, onNext, onCorrect]);
   const usedIdxs = new Set(filled.filter(Boolean).map(f => f!.tileIdx));
   const dropAt = (slotIdx: number, item: { idx: number; letter: string }) => {
     if (filled[slotIdx]) return false;
     if (item.letter !== slots[slotIdx]) {
       setShake(true);
+      onWrong?.();
       const hints = [
         "Try a different sound! You're so close.",
         "Keep going — find the right spot!",
@@ -1942,7 +2025,7 @@ function BuildItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonDat
         </div>
       </div>
       <div className="flex flex-col items-center gap-8 w-full">
-        <Brick size={100} pose={isCorrect ? "celebrating" : "idle"} />
+        <Brick size={100} pose={isCorrect ? "celebrating" : shake ? "tryAgain" : "idle"} />
         <div style={{ fontSize: 32, textAlign: "center" }}>{lesson.wordEmoji} {lesson.word}</div>
         {/* Slots */}
         <div className="flex gap-4 justify-center">
@@ -1997,9 +2080,24 @@ function BuildItStep({ onNext, lesson }: { onNext: () => void; lesson: LessonDat
 }
 
 // ─── Win Screen ───────────────────────────────────────────────────────────────
-function WinScreen({ onDone, variant = "small", lesson }: { onDone: () => void; variant?: WinVariant; lesson?: LessonData }) {
+function WinScreen({ onDone, variant = "small", lesson, comboMax }: { onDone: () => void; variant?: WinVariant; lesson?: LessonData; comboMax?: number }) {
+  const completeLesson = useStore(s => s.completeLesson);
+  const [result, setResult] = useState<LessonResult | null>(null);
   const [showXP, setShowXP] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setShowXP(true), 400); return () => clearTimeout(t); }, []);
+
+  // Fire once on mount — record completion + capture level/shield result
+  const firedRef = useRef(false);
+  useEffect(() => {
+    if (firedRef.current) return;
+    firedRef.current = true;
+    if (lesson) {
+      const r = completeLesson(lesson.id, lesson.xpReward);
+      setResult(r);
+    }
+    const t = setTimeout(() => setShowXP(true), 400);
+    return () => clearTimeout(t);
+  }, [completeLesson, lesson]);
+
   const confettiColors = [C.primary, C.teal, C.amber, C.blush, C.yellow, C.sky, C.lexi];
   const confettiItems = Array.from({ length: 28 }, (_, i) => ({
     color: confettiColors[i % confettiColors.length],
@@ -2009,12 +2107,15 @@ function WinScreen({ onDone, variant = "small", lesson }: { onDone: () => void; 
     rotate: Math.random() * 360,
   }));
   const xpReward = lesson?.xpReward ?? 15;
+  // Promote to level variant if the lesson triggered a real level jump
+  const effectiveVariant: WinVariant = result?.levelUp ? "level" : variant;
   const variantData = {
     small: { title: "Awesome!", sub: "You completed the lesson!", xp: xpReward },
-    streak: { title: "7-Day Streak!", sub: "You're on fire! Amazing dedication!", xp: 30 },
-    level: { title: "Level Up!", sub: `You've mastered ${lesson?.phoneme ?? "it"}!`, xp: xpReward },
+    streak: { title: `${result?.newStreak ?? 7}-Day Streak!`, sub: "You're on fire! Amazing dedication!", xp: 30 },
+    level: { title: `Level ${result?.newLevel ?? 2}!`, sub: `You've mastered ${lesson?.phoneme ?? "it"}!`, xp: xpReward + 10 },
   };
-  const { title, sub, xp } = variantData[variant];
+  const { title, sub, xp } = variantData[effectiveVariant];
+  const mascotPose = effectiveVariant === "level" ? "levelUp" : "celebrating";
   return (
     <div
       className="flex flex-col items-center justify-between h-full px-8 py-12"
@@ -2043,12 +2144,46 @@ function WinScreen({ onDone, variant = "small", lesson }: { onDone: () => void; 
       ))}
       <XPBurst xp={xp} show={showXP} />
       <div />
-      <div className="flex flex-col items-center gap-6 z-10">
+      <div className="flex flex-col items-center gap-5 z-10">
+        {/* Shield-saved toast */}
+        {result?.shieldUsed && (
+          <motion.div
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2, type: "spring" }}
+            style={{
+              background: `linear-gradient(135deg, ${C.amber}, #E8772E)`,
+              borderRadius: 16, padding: "10px 18px",
+              display: "flex", alignItems: "center", gap: 10,
+              boxShadow: "0 6px 18px rgba(244,162,97,0.35)",
+            }}
+          >
+            <Shield size={18} color="white" />
+            <span style={{ color: "white", fontWeight: 700, fontSize: 13 }}>
+              Your shield saved your streak!
+            </span>
+          </motion.div>
+        )}
+        {comboMax && comboMax >= 3 && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.4, type: "spring" }}
+            style={{
+              background: C.tealSoft, borderRadius: 14, padding: "6px 14px",
+              fontSize: 12, fontWeight: 700, color: C.teal,
+            }}
+          >
+            🔥 Best combo: {comboMax} in a row
+          </motion.div>
+        )}
         <motion.div
-          animate={{ scale: [1, 1.08, 1], rotate: [-3, 3, -3, 0] }}
+          animate={effectiveVariant === "level"
+            ? { scale: [1, 1.15, 1], rotate: [-5, 5, -5, 0] }
+            : { scale: [1, 1.08, 1], rotate: [-3, 3, -3, 0] }}
           transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
         >
-          <Lexi size={140} pose="celebrating" />
+          <Lexi size={effectiveVariant === "level" ? 160 : 140} pose={mascotPose} />
         </motion.div>
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
@@ -2059,12 +2194,12 @@ function WinScreen({ onDone, variant = "small", lesson }: { onDone: () => void; 
           <div style={{ fontSize: 40, fontWeight: 800, color: C.primary }}>{title}</div>
           <div style={{ fontSize: 16, color: C.muted }}>{sub}</div>
         </motion.div>
-        {/* Stats row */}
+        {/* Stats row — real values from store */}
         <div className="flex gap-4">
           {[
             { icon: <Zap size={20} color={C.yellow} />, value: `+${xp} XP`, color: C.yellow },
-            { icon: <StreakFlame days={7} size={22} />, value: "7 days", color: C.amber },
-            { icon: <Star size={20} color={C.primary} fill={C.primary} />, value: "3 stars", color: C.primary },
+            { icon: <StreakFlame days={result?.newStreak ?? 1} size={22} />, value: `${result?.newStreak ?? 1} day${(result?.newStreak ?? 1) === 1 ? "" : "s"}`, color: C.amber },
+            { icon: <Star size={20} color={C.primary} fill={C.primary} />, value: `Lvl ${result?.newLevel ?? 1}`, color: C.primary },
           ].map(s => (
             <Card key={s.value} className="flex-1 p-3 flex flex-col items-center gap-1" style={{ background: "rgba(255,255,255,0.85)" }}>
               {s.icon}
@@ -2127,6 +2262,27 @@ function LessonScreen({ onDone, lessonId }: { onDone: (lessonId: string) => void
     const nextStep = steps[stepIdx + 1];
     if (nextStep) setStep(nextStep);
   };
+
+  // Combo tracking + adaptive signals
+  const [combo, setCombo] = useState(0);
+  const [comboMax, setComboMax] = useState(0);
+  const [comboKey, setComboKey] = useState(0); // bumps for re-animation
+  const recordHit = useStore(s => s.recordHit);
+  const recordMiss = useStore(s => s.recordMiss);
+  const onCorrect = useCallback(() => {
+    setCombo(c => {
+      const n = c + 1;
+      setComboMax(m => (n > m ? n : m));
+      return n;
+    });
+    setComboKey(k => k + 1);
+    recordHit();
+  }, [recordHit]);
+  const onWrong = useCallback(() => {
+    setCombo(0);
+    recordMiss();
+  }, [recordMiss]);
+
   const stepColors: Record<LessonStep, string> = {
     hear: C.teal, see: C.primary, trace: C.glow, say: C.blush, build: C.amber, win: C.yellow
   };
@@ -2162,17 +2318,38 @@ function LessonScreen({ onDone, lessonId }: { onDone: (lessonId: string) => void
           </div>
         </div>
       )}
+      {/* Combo chip — appears after 2+ correct answers in a row */}
+      {step !== "win" && combo >= 2 && (
+        <div className="px-5 pb-2 flex justify-center" style={{ marginTop: -8 }}>
+          <motion.div
+            key={comboKey}
+            initial={{ scale: 0.6, opacity: 0, y: -8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 380, damping: 18 }}
+            style={{
+              background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+              color: "white", borderRadius: 14,
+              padding: "5px 12px", fontSize: 12, fontWeight: 700,
+              fontFamily: uiFont,
+              boxShadow: "0 4px 12px rgba(93,202,165,0.35)",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            🔥 {combo} in a row!
+          </motion.div>
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
         {step === "hear" && <HearItStep onNext={next} lesson={lesson} />}
         {step === "see" && <SeeItStep onNext={next} lesson={lesson} />}
         {step === "trace" && <TraceItStep onNext={next} lesson={lesson} />}
-        {step === "say" && <SayItStep onNext={next} lesson={lesson} />}
+        {step === "say" && <SayItStep onNext={next} lesson={lesson} onCorrect={onCorrect} onWrong={onWrong} />}
         {step === "build" && (
           <DndProvider backend={DndBackend} options={isTouch ? { enableMouseEvents: true } : undefined}>
-            <BuildItStep onNext={next} lesson={lesson} />
+            <BuildItStep onNext={next} lesson={lesson} onCorrect={onCorrect} onWrong={onWrong} />
           </DndProvider>
         )}
-        {step === "win" && <WinScreen onDone={() => onDone(lessonId)} variant={lesson.isBoss ? "level" : "small"} lesson={lesson} />}
+        {step === "win" && <WinScreen onDone={() => onDone(lessonId)} variant={lesson.isBoss ? "level" : "small"} lesson={lesson} comboMax={comboMax} />}
       </div>
     </div>
   );
@@ -3103,6 +3280,104 @@ function ParentDashboard({ onExit }: { onExit: () => void }) {
               }}
             />
           )}
+        </div>
+      </div>
+
+      {/* Notification previews */}
+      <div className="px-6 pb-4">
+        <div style={{ fontSize: 13, fontWeight: 700, color: ADULT_INK, marginBottom: 6 }}>Notifications preview</div>
+        <div style={{ fontSize: 11, color: ADULT_MUTED, marginBottom: 10 }}>What {name} sees when it's time to practice.</div>
+
+        {/* iOS daily push mockup */}
+        <div style={{
+          background: "#1A1A2E", borderRadius: 20, padding: 14,
+          boxShadow: "0 4px 14px rgba(26,26,46,0.15)",
+          marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 10, color: "#A6A8B5", fontWeight: 600, marginBottom: 8, paddingLeft: 4 }}>NOTIFICATION</div>
+          <div style={{
+            background: "rgba(255,255,255,0.92)", borderRadius: 14,
+            padding: "10px 12px", display: "flex", gap: 10, alignItems: "flex-start",
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 8,
+              background: `linear-gradient(135deg, ${C.primary}, ${C.lexi})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 18, color: "white", fontWeight: 800,
+              flexShrink: 0,
+            }}>
+              L
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#1A1A2E" }}>Lexio</span>
+                <span style={{ fontSize: 10, color: "#6B6B8A" }}>now</span>
+              </div>
+              <div style={{ fontSize: 13, color: "#1A1A2E", fontWeight: 600, marginTop: 2 }}>
+                Echo's waiting for you 🎧
+              </div>
+              <div style={{ fontSize: 12, color: "#3D3D54", marginTop: 2, lineHeight: 1.4 }}>
+                Same time as yesterday — just a 2-minute lesson to keep your {streak}-day streak alive.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Weekly email digest mockup */}
+        <div style={{
+          background: "white", borderRadius: 16, padding: 0,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+          overflow: "hidden",
+          border: "1px solid #E5E7ED",
+        }}>
+          {/* Email header */}
+          <div style={{
+            background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+            padding: "12px 16px",
+            color: "white",
+          }}>
+            <div style={{ fontSize: 10, opacity: 0.8, letterSpacing: 0.5 }}>WEEKLY DIGEST · LEXIO</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{name}'s week in reading</div>
+          </div>
+          <div style={{ padding: "14px 16px" }}>
+            <div style={{ fontSize: 12, color: ADULT_INK, lineHeight: 1.6, marginBottom: 10 }}>
+              {name} read for <strong>{weekMinutes} minutes</strong> across <strong>{weekSessions} sessions</strong> this week and mastered <strong>{masteredCount} new phonemes</strong>. 🎉
+            </div>
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 12,
+            }}>
+              {[
+                { v: weekMinutes, l: "min" },
+                { v: weekSessions, l: "sessions" },
+                { v: streak, l: "day streak" },
+              ].map(s => (
+                <div key={s.l} style={{
+                  background: "#F4F5F8", borderRadius: 8, padding: "8px 4px", textAlign: "center",
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.primary }}>{s.v}</div>
+                  <div style={{ fontSize: 9, color: ADULT_MUTED, marginTop: 2 }}>{s.l.toUpperCase()}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: ADULT_MUTED, marginBottom: 8 }}>This week's focus:</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+              {focusList.slice(0, 3).map(p => (
+                <div key={p.id} style={{
+                  background: C.amberSoft, color: C.amber, fontSize: 11, fontWeight: 700,
+                  padding: "4px 10px", borderRadius: 8, fontFamily: dyslexicFont,
+                }}>
+                  {p.label}
+                </div>
+              ))}
+            </div>
+            <div style={{
+              background: C.primary, color: "white", textAlign: "center",
+              borderRadius: 10, padding: "10px 12px",
+              fontSize: 12, fontWeight: 700,
+            }}>
+              See full report →
+            </div>
+          </div>
         </div>
       </div>
 
