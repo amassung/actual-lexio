@@ -1,0 +1,55 @@
+/* ─── Mobile responsive overrides (≤480px) ─────────────────────────────────
+   Desktop styles are left untouched. On phone-width screens we drop the
+   mocked phone-frame chrome and let the app fill the viewport edge-to-edge,
+   while preserving the inner screens that were already designed at 390px.
+*/
+
+@media (max-width: 480px) {
+  html, body {
+    overflow-x: hidden;
+    background: #FFFDF5;
+  }
+
+  /* Outer page wrapper: no padding, no gradient, fill viewport */
+  .lexio-shell {
+    padding: 0 !important;
+    min-height: 100dvh !important;
+    background: #FFFDF5 !important;
+    align-items: stretch !important;
+  }
+
+  /* Phone frame: drop chrome, fill viewport */
+  .lexio-phone-frame {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: 100vw !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    flex-shrink: 1 !important;
+  }
+
+  /* Hide the mocked device notch — the real device has its own */
+  .lexio-phone-notch {
+    display: none !important;
+  }
+
+  /* Reserve space for the iOS home indicator below the tab bar */
+  .lexio-tab-wrap {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: #FFFFFF;
+  }
+
+  /* Push screen content up by the safe-area amount so nothing hides under
+     the tab bar when it grows for the home indicator */
+  .lexio-screen-content {
+    bottom: calc(var(--lexio-tab-h, 0px) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* Tab visible: set the variable so screen-content reserves correct space */
+@media (max-width: 480px) {
+  .lexio-tab-wrap ~ * { /* harmless selector to keep cascade; real var set below */ }
+  .lexio-phone-frame:has(.lexio-tab-wrap) {
+    --lexio-tab-h: 84px;
+  }
+}

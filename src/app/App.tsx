@@ -2811,6 +2811,7 @@ export default function App() {
 
   return (
     <div
+      className="lexio-shell"
       style={{
         minHeight: "100vh",
         background: `linear-gradient(135deg, #E8E0FF 0%, #FFFDF5 40%, #D4F0E8 100%)`,
@@ -2823,6 +2824,7 @@ export default function App() {
     >
       {/* Phone frame */}
       <div
+        className="lexio-phone-frame"
         style={{
           width: 390,
           height: 844,
@@ -2835,13 +2837,13 @@ export default function App() {
         }}
       >
         {/* Status bar notch */}
-        <div style={{
+        <div className="lexio-phone-notch" style={{
           position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
           width: 120, height: 34, background: "#1A1A2E", borderRadius: "0 0 20px 20px",
           zIndex: 100,
         }} />
         {/* Screen content */}
-        <div style={{
+        <div className="lexio-screen-content" style={{
           position: "absolute",
           top: 0,
           left: 0,
@@ -2862,7 +2864,7 @@ export default function App() {
         </div>
         {/* Tab bar */}
         {showTabs && (
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}>
+          <div className="lexio-tab-wrap" style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}>
             <TabBar active={tab} onChange={handleTabChange} />
           </div>
         )}
