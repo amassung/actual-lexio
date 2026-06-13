@@ -4,7 +4,7 @@ import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { TouchBackend } from "react-dnd-touch-backend";
 import { useStore, type LessonResult, pickWord, WORD_BANK } from "../store";
-import { playTTS, playSequence, cancelTTS } from "../services/tts";
+import { playTTS, playSequence, cancelTTS, playPhonemeFile } from "../services/tts";
 import { TraceLetter } from "../components/TraceLetter";
 
 const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || (navigator as any).maxTouchPoints > 0);
@@ -57,27 +57,53 @@ function speak(text: string, opts: SpeakOpts = {}) {
   // Fire-and-forget; promise is intentionally not awaited.
   void playTTS(text, { rate: opts.rate });
 }
-// Map a written phoneme to a drawn-out sound the TTS can pronounce.
+// Map a written phoneme to a TTS-friendly sustained or pulsed sound.
+//
+// Phonetics reality: TTS engines (Fish, ElevenLabs, browser) are trained on
+// real speech and will always add a vowel tail to isolated stop consonants.
+// For stops (t, p, k, b, d, g) we pair with a short "i" instead of schwa
+// "uh" — closer to phonics-correct drilling. For continuants (m, n, s, f, l,
+// r, sh, th) we draw the sound out with repeated letters.
+//
+// Better still: drop a recorded clip at public/audio/phonemes/{key}.mp3 and
+// playPhonemeFile() picks it up automatically, bypassing TTS entirely.
 const PHONEME_MAP: Record<string, { text: string; rate: number }> = {
-  sh: { text: "shhhh", rate: 0.4 },
-  ch: { text: "ch ch ch", rate: 0.45 },
-  th: { text: "thhh", rate: 0.4 },
-  wh: { text: "wh wh", rate: 0.5 },
+  // Digraphs / blends — TTS handles these reasonably well
+  sh: { text: "Shhhhh", rate: 0.4 },
+  ch: { text: "ch, ch, ch", rate: 0.5 },
+  th: { text: "Thhhh", rate: 0.4 },
+  wh: { text: "wh, wh", rate: 0.5 },
+  // Vowels — short sounds
+  a: { text: "ahh", rate: 0.5 },
+  e: { text: "ehh", rate: 0.5 },
   i: { text: "ih", rate: 0.55 },
-  a: { text: "ah", rate: 0.55 },
-  e: { text: "eh", rate: 0.55 },
-  o: { text: "ah", rate: 0.55 },
-  u: { text: "uh", rate: 0.55 },
-  p: { text: "puh", rate: 0.55 },
-  t: { text: "tuh", rate: 0.55 },
-  m: { text: "mmm", rate: 0.5 },
-  s: { text: "sss", rate: 0.5 },
-  n: { text: "nnn", rate: 0.5 },
-  r: { text: "rr", rate: 0.5 },
+  o: { text: "ahh", rate: 0.5 },
+  u: { text: "uhh", rate: 0.55 },
+  // Continuants — sustained / drawn out
+  m: { text: "Mmmmmmm", rate: 0.35 },
+  n: { text: "Nnnnnnn", rate: 0.35 },
+  s: { text: "Sssssss", rate: 0.4 },
+  f: { text: "Ffffff", rate: 0.4 },
+  l: { text: "Llllll", rate: 0.4 },
+  r: { text: "Rrrrrr", rate: 0.45 },
+  z: { text: "Zzzzzz", rate: 0.4 },
+  v: { text: "Vvvvvv", rate: 0.4 },
+  // Stops — pair with short "i" rather than schwa "uh"
+  t: { text: "ti, ti, ti", rate: 0.55 },
+  p: { text: "pi, pi, pi", rate: 0.55 },
+  k: { text: "ki, ki, ki", rate: 0.55 },
+  b: { text: "bi, bi, bi", rate: 0.55 },
+  d: { text: "di, di, di", rate: 0.55 },
+  g: { text: "gi, gi, gi", rate: 0.55 },
 };
 function speakPhoneme(letters: string) {
-  const entry = PHONEME_MAP[letters.toLowerCase()] ?? { text: letters, rate: 0.55 };
-  void playTTS(entry.text, { rate: entry.rate });
+  const key = letters.toLowerCase();
+  // Prefer a recorded clip if present; only TTS as fallback.
+  void playPhonemeFile(key).then(played => {
+    if (played) return;
+    const entry = PHONEME_MAP[key] ?? { text: letters, rate: 0.55 };
+    void playTTS(entry.text, { rate: entry.rate });
+  });
 }
 // Sound out a phoneme + word: "shh… shh… ship". Chained as a real sequence
 // so the next segment only starts after the previous audio finishes.

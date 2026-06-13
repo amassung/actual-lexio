@@ -145,6 +145,43 @@ export async function playTTS(text: string, opts: TTSOpts = {}): Promise<void> {
   });
 }
 
+// ─── Phoneme audio files ──────────────────────────────────────────────────────
+// Tries to play a recorded phoneme sound from /audio/phonemes/{key}.mp3.
+// Resolves with `true` on success; `false` if the file is missing or fails
+// to play (caller should fall back to TTS).
+//
+// Drop human-recorded clips into public/audio/phonemes/ named by the phoneme
+// key (lowercase, no symbols): m.mp3, t.mp3, sh.mp3, etc. They'll be used in
+// preference to TTS, which is fundamentally limited for isolated phonemes.
+const phonemeFileCache = new Map<string, "missing" | "ok">();
+
+export async function playPhonemeFile(key: string): Promise<boolean> {
+  const k = key.toLowerCase();
+  if (phonemeFileCache.get(k) === "missing") return false;
+  const url = `/audio/phonemes/${k}.mp3`;
+  return new Promise<boolean>(resolve => {
+    cancelTTS();
+    try {
+      const audio = new Audio(url);
+      currentAudio = audio;
+      const cleanup = (ok: boolean) => {
+        if (currentAudio === audio) currentAudio = null;
+        phonemeFileCache.set(k, ok ? "ok" : "missing");
+        resolve(ok);
+      };
+      audio.onended = () => cleanup(true);
+      audio.onerror = () => cleanup(false);
+      const p = audio.play();
+      if (p && typeof p.catch === "function") {
+        p.catch(() => cleanup(false));
+      }
+    } catch {
+      phonemeFileCache.set(k, "missing");
+      resolve(false);
+    }
+  });
+}
+
 // Play multiple TTS segments sequentially with optional gaps between.
 // Items: a string utterance, or a number (ms pause).
 export async function playSequence(items: Array<string | number>, opts: TTSOpts = {}): Promise<void> {
