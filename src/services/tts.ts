@@ -1,52 +1,62 @@
-// ─── Fish Audio TTS adapter ────────────────────────────────────────────────────
+// ─── ElevenLabs TTS adapter ────────────────────────────────────────────────────
 // Public surface:
 //   playTTS(text, opts) → Promise<void> that resolves when audio finishes
 //   cancelTTS()         → stop any current playback
 //
 // Falls back to browser speechSynthesis when:
-//   - VITE_FISH_AUDIO_API_KEY is unset (e.g. local dev without .env.local)
-//   - The Fish Audio fetch throws (CORS, network, 4xx/5xx)
+//   - VITE_ELEVENLABS_API_KEY is unset (e.g. local dev without .env.local)
+//   - The ElevenLabs fetch throws (CORS, network, 4xx/5xx)
 //   - The browser blocks the Audio.play() promise (autoplay policy)
 //
 // Blobs are cached in-memory by request key, so a tap-to-replay is instant
 // and doesn't burn additional API quota.
 
 export type TTSOpts = {
-  rate?: number;          // 0.5–1.5; sent as Fish "chunk_length"/speed hint
-  voiceId?: string;       // overrides VITE_FISH_AUDIO_VOICE_ID
+  rate?: number;          // 0.5–1.5; maps to ElevenLabs voice_settings.speed
+  voiceId?: string;       // overrides VITE_ELEVENLABS_VOICE_ID
 };
 
-const KEY = (import.meta as any).env?.VITE_FISH_AUDIO_API_KEY as string | undefined;
-const DEFAULT_VOICE = (import.meta as any).env?.VITE_FISH_AUDIO_VOICE_ID as string | undefined;
-const ENDPOINT = "https://api.fish.audio/v1/tts";
+const KEY = (import.meta as any).env?.VITE_ELEVENLABS_API_KEY as string | undefined;
+const DEFAULT_VOICE = ((import.meta as any).env?.VITE_ELEVENLABS_VOICE_ID as string | undefined)
+  ?? "gwN3hEbGhE9zHBbp2V10"; // Lexio Teacher (fallback if env var missing)
+const MODEL_ID = ((import.meta as any).env?.VITE_ELEVENLABS_MODEL_ID as string | undefined)
+  ?? "eleven_turbo_v2_5"; // fast + crisp; good for kids' phonics
 
 const blobCache = new Map<string, Promise<Blob>>();
 let currentAudio: HTMLAudioElement | null = null;
 
 function cacheKey(text: string, opts: TTSOpts) {
-  return `${opts.voiceId ?? DEFAULT_VOICE ?? "_"}|${opts.rate ?? 1}|${text}`;
+  return `${opts.voiceId ?? DEFAULT_VOICE}|${opts.rate ?? 1}|${text}`;
 }
 
-async function fetchFishAudio(text: string, opts: TTSOpts): Promise<Blob> {
-  if (!KEY) throw new Error("VITE_FISH_AUDIO_API_KEY not set");
+async function fetchElevenLabs(text: string, opts: TTSOpts): Promise<Blob> {
+  if (!KEY) throw new Error("VITE_ELEVENLABS_API_KEY not set");
+  const voice = opts.voiceId ?? DEFAULT_VOICE;
   const body: Record<string, unknown> = {
     text,
-    format: "mp3",
-    latency: "normal",
-  };
-  const voice = opts.voiceId ?? DEFAULT_VOICE;
-  if (voice) body.reference_id = voice;
-  // Fish API doesn't expose a direct rate knob in v1; map our rate to
-  // "normal_2x"-style if anything is supported. Otherwise we just send text.
-  const resp = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${KEY}`,
-      "Content-Type": "application/json",
+    model_id: MODEL_ID,
+    voice_settings: {
+      stability: 0.65,        // higher = steadier on sustained sounds
+      similarity_boost: 0.85, // stay close to the cloned voice
+      style: 0.0,             // neutral tone — best for teaching
+      use_speaker_boost: true,
+      // Map our rate (0.5–1.5) to ElevenLabs' speed range (~0.7–1.2).
+      speed: Math.max(0.7, Math.min(1.2, opts.rate ?? 1)),
     },
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok) throw new Error(`Fish Audio ${resp.status}`);
+  };
+  const resp = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`,
+    {
+      method: "POST",
+      headers: {
+        "xi-api-key": KEY,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!resp.ok) throw new Error(`ElevenLabs ${resp.status}`);
   const blob = await resp.blob();
   if (blob.size < 100) throw new Error("Empty audio response");
   return blob;
@@ -56,7 +66,7 @@ function getBlob(text: string, opts: TTSOpts): Promise<Blob> {
   const k = cacheKey(text, opts);
   let entry = blobCache.get(k);
   if (!entry) {
-    entry = fetchFishAudio(text, opts).catch(err => {
+    entry = fetchElevenLabs(text, opts).catch(err => {
       // Don't cache failures — next call gets another shot
       blobCache.delete(k);
       throw err;
@@ -113,7 +123,7 @@ export async function playTTS(text: string, opts: TTSOpts = {}): Promise<void> {
     blob = await getBlob(text, opts);
   } catch (e) {
     // Network/CORS/4xx — fall back without throwing to caller
-    if (typeof console !== "undefined") console.warn("[Lexio TTS] Fish Audio failed, falling back:", (e as Error).message);
+    if (typeof console !== "undefined") console.warn("[Lexio TTS] ElevenLabs failed, falling back:", (e as Error).message);
     return playSpeechSynthesis(text, opts);
   }
 
