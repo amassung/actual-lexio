@@ -2078,11 +2078,327 @@ function BuildItStep({ onNext, lesson, onCorrect, onWrong }: { onNext: () => voi
   );
 }
 
+// ─── Lesson Unlock Overlay ────────────────────────────────────────────────────
+// Shown after "Next" on the win screen — animates the locked next node on the
+// learning path snapping open with a lock-breaking + sparkle burst, then
+// reveals the unlocked node before returning the user to the path.
+function getNextLessonDef(currentLessonId: string) {
+  const idx = LEARN_PATH_DEF.findIndex(n => n.id === currentLessonId);
+  if (idx === -1 || idx >= LEARN_PATH_DEF.length - 1) return null;
+  return LEARN_PATH_DEF[idx + 1];
+}
+
+function LessonUnlockOverlay({ currentLessonId, onContinue }: { currentLessonId: string; onContinue: () => void }) {
+  const nextDef = getNextLessonDef(currentLessonId);
+  const [phase, setPhase] = useState<"intro" | "shake" | "burst" | "revealed">("intro");
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase("shake"), 650);
+    const t2 = setTimeout(() => setPhase("burst"), 1350);
+    const t3 = setTimeout(() => setPhase("revealed"), 1750);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
+  // No "next" lesson → path complete celebration instead
+  const isPathComplete = !nextDef;
+  const nextIsBoss = nextDef?.boss ?? false;
+
+  // Particle burst at lock-break moment
+  const particles = Array.from({ length: 14 }, (_, i) => {
+    const angle = (i / 14) * Math.PI * 2;
+    return {
+      id: i,
+      dx: Math.cos(angle) * (60 + Math.random() * 40),
+      dy: Math.sin(angle) * (60 + Math.random() * 40),
+      size: 4 + Math.random() * 5,
+      color: [C.yellow, C.amber, C.primary, C.teal, "white"][i % 5],
+      delay: Math.random() * 0.08,
+    };
+  });
+  const sparkles = Array.from({ length: 10 }, (_, i) => ({
+    id: i,
+    x: -60 + Math.random() * 120,
+    y: -60 + Math.random() * 120,
+    delay: 0.1 + Math.random() * 0.4,
+    size: 10 + Math.random() * 8,
+  }));
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{
+        position: "absolute", inset: 0, zIndex: 50,
+        background: "linear-gradient(160deg, rgba(20,12,48,0.95), rgba(40,20,80,0.95))",
+        backdropFilter: "blur(10px)",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: "32px 24px",
+        fontFamily: uiFont,
+        overflow: "hidden",
+      }}
+    >
+      {/* Floating ambient sparkles */}
+      {[...Array(18)].map((_, i) => (
+        <motion.div
+          key={`amb-${i}`}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{
+            opacity: [0, 0.7, 0],
+            scale: [0, 1, 0],
+            y: [0, -30, -60],
+          }}
+          transition={{
+            duration: 3 + Math.random() * 2,
+            delay: Math.random() * 2,
+            repeat: Infinity,
+            ease: "easeOut",
+          }}
+          style={{
+            position: "absolute",
+            top: `${Math.random() * 100}%`,
+            left: `${Math.random() * 100}%`,
+            width: 4, height: 4, borderRadius: 4,
+            background: i % 2 === 0 ? C.yellow : C.lexi,
+            boxShadow: `0 0 8px ${i % 2 === 0 ? C.yellow : C.lexi}`,
+          }}
+        />
+      ))}
+
+      {/* Title */}
+      <motion.div
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        style={{
+          fontSize: 12, fontWeight: 800,
+          letterSpacing: 4, color: C.yellow,
+          textTransform: "uppercase",
+        }}
+      >
+        Lesson Complete
+      </motion.div>
+      <motion.div
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        style={{
+          fontSize: 28, fontWeight: 900, color: "white",
+          marginTop: 6, marginBottom: 36, textAlign: "center",
+        }}
+      >
+        {isPathComplete ? "Path Complete!" : "Unlocking next lesson…"}
+      </motion.div>
+
+      {/* Mini path: done node → connecting line → locked-then-unlocked node */}
+      <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 28 }}>
+        {/* Completed node */}
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.25, type: "spring", bounce: 0.5 }}
+          style={{
+            width: 64, height: 64, borderRadius: 32,
+            background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: `0 0 30px rgba(93,202,165,0.55)`,
+            flexShrink: 0,
+          }}
+        >
+          <Check size={28} color="white" strokeWidth={3} />
+        </motion.div>
+
+        {/* Connecting line w/ traveling glow */}
+        <div style={{ position: "relative", width: 70, height: 6, marginInline: 4 }}>
+          <motion.div
+            initial={{ scaleX: 0, originX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ delay: 0.5, duration: 0.45, ease: "easeOut" }}
+            style={{
+              position: "absolute", inset: 0, borderRadius: 3,
+              background: `linear-gradient(90deg, ${C.teal}, ${C.yellow})`,
+              boxShadow: `0 0 16px ${C.yellow}`,
+            }}
+          />
+          <motion.div
+            initial={{ x: 0, opacity: 0 }}
+            animate={{ x: 64, opacity: [0, 1, 1, 0] }}
+            transition={{ delay: 0.55, duration: 0.55, ease: "easeInOut" }}
+            style={{
+              position: "absolute", top: -4, left: 0,
+              width: 14, height: 14, borderRadius: 7,
+              background: "white",
+              boxShadow: `0 0 18px ${C.yellow}`,
+            }}
+          />
+        </div>
+
+        {/* Lock / Unlock target node */}
+        <motion.div
+          animate={
+            phase === "shake"
+              ? { x: [0, -4, 4, -4, 4, 0], rotate: [0, -3, 3, -3, 3, 0] }
+              : { x: 0, rotate: 0 }
+          }
+          transition={{ duration: 0.55, repeat: phase === "shake" ? 1 : 0 }}
+          style={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}
+        >
+          {/* Background ring — gray when locked, gradient when unlocked */}
+          <motion.div
+            animate={{
+              background: phase === "revealed" || phase === "burst"
+                ? (nextIsBoss
+                  ? `linear-gradient(135deg, ${C.amber}, ${C.primary})`
+                  : `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`)
+                : "#3A2D5F",
+              boxShadow: phase === "revealed"
+                ? `0 0 40px ${nextIsBoss ? C.amber : C.primary}, 0 0 80px ${nextIsBoss ? C.amber : C.primary}66`
+                : "0 0 0px rgba(0,0,0,0)",
+            }}
+            transition={{ duration: 0.4 }}
+            style={{
+              position: "absolute", inset: 0,
+              borderRadius: 40,
+              border: phase === "revealed" ? "3px solid white" : "3px solid rgba(255,255,255,0.15)",
+            }}
+          />
+
+          {/* Lock icon — visible until burst */}
+          <motion.div
+            animate={
+              phase === "burst" || phase === "revealed"
+                ? { scale: 0, opacity: 0, rotate: 25 }
+                : { scale: 1, opacity: 1, rotate: 0 }
+            }
+            transition={{ duration: 0.25, ease: "easeIn" }}
+            style={{
+              position: "absolute", inset: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Lock size={34} color="rgba(255,255,255,0.85)" strokeWidth={2.5} />
+          </motion.div>
+
+          {/* Particle burst on break */}
+          {(phase === "burst" || phase === "revealed") && particles.map(p => (
+            <motion.div
+              key={p.id}
+              initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+              animate={{ x: p.dx, y: p.dy, opacity: 0, scale: 0.3 }}
+              transition={{ duration: 0.7, delay: p.delay, ease: "easeOut" }}
+              style={{
+                position: "absolute", top: "50%", left: "50%",
+                marginTop: -p.size / 2, marginLeft: -p.size / 2,
+                width: p.size, height: p.size, borderRadius: p.size,
+                background: p.color,
+                boxShadow: `0 0 8px ${p.color}`,
+              }}
+            />
+          ))}
+
+          {/* Revealed next-lesson icon */}
+          {phase === "revealed" && (
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", bounce: 0.55, duration: 0.7 }}
+              style={{
+                position: "absolute", inset: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              {isPathComplete
+                ? <Trophy size={36} color="white" />
+                : nextIsBoss
+                  ? <Star size={36} color="white" fill={C.yellow} />
+                  : <span style={{ fontSize: 32 }}>📖</span>}
+            </motion.div>
+          )}
+
+          {/* Sparkle burst around node on reveal */}
+          {phase === "revealed" && sparkles.map(s => (
+            <motion.div
+              key={`sp-${s.id}`}
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: [0, 1, 0], scale: [0, 1, 0.6], rotate: 180 }}
+              transition={{ duration: 0.9, delay: s.delay }}
+              style={{
+                position: "absolute",
+                top: `calc(50% + ${s.y}px)`, left: `calc(50% + ${s.x}px)`,
+                marginTop: -s.size / 2, marginLeft: -s.size / 2,
+                pointerEvents: "none",
+              }}
+            >
+              <Sparkles size={s.size} color={C.yellow} fill={C.yellow} />
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+
+      {/* "Next lesson unlocked" reveal text */}
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{
+          opacity: phase === "revealed" ? 1 : 0,
+          y: phase === "revealed" ? 0 : 14,
+        }}
+        transition={{ duration: 0.4 }}
+        style={{ textAlign: "center", marginBottom: 24, minHeight: 64 }}
+      >
+        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 3, color: C.yellow, textTransform: "uppercase" }}>
+          {isPathComplete ? "You finished the path!" : "New lesson unlocked"}
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 900, color: "white", marginTop: 6 }}>
+          {isPathComplete ? "Amazing!" : nextDef?.label}
+        </div>
+        {!isPathComplete && nextDef?.sub && (
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>
+            {nextDef.sub}
+          </div>
+        )}
+      </motion.div>
+
+      {/* Continue button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{
+          opacity: phase === "revealed" ? 1 : 0,
+          y: phase === "revealed" ? 0 : 20,
+        }}
+        transition={{ delay: phase === "revealed" ? 0.25 : 0, duration: 0.4 }}
+        style={{ width: "100%", maxWidth: 320 }}
+      >
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          onClick={onContinue}
+          disabled={phase !== "revealed"}
+          style={{
+            width: "100%", padding: "16px 24px",
+            borderRadius: 18, border: "none",
+            background: `linear-gradient(135deg, ${C.yellow}, ${C.amber})`,
+            color: C.ink, fontWeight: 800, fontSize: 17,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: `0 10px 30px rgba(255,204,0,0.35)`,
+            cursor: phase === "revealed" ? "pointer" : "default",
+            fontFamily: uiFont,
+          }}
+        >
+          {isPathComplete ? "Back to Path" : "Continue"}
+          <ArrowRight size={20} />
+        </motion.button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Win Screen ───────────────────────────────────────────────────────────────
 function WinScreen({ onDone, variant = "small", lesson, comboMax }: { onDone: () => void; variant?: WinVariant; lesson?: LessonData; comboMax?: number }) {
   const completeLesson = useStore(s => s.completeLesson);
   const [result, setResult] = useState<LessonResult | null>(null);
   const [showXP, setShowXP] = useState(false);
+  const [showUnlock, setShowUnlock] = useState(false);
 
   // Fire once on mount — record completion + capture level/shield result
   const firedRef = useRef(false);
@@ -2244,9 +2560,12 @@ function WinScreen({ onDone, variant = "small", lesson, comboMax }: { onDone: ()
           </motion.div>
         </motion.div>
       </div>
-      <PrimaryBtn onClick={onDone} className="w-full text-xl z-10">
-        Keep Going! <ArrowRight size={22} />
+      <PrimaryBtn onClick={() => setShowUnlock(true)} className="w-full text-xl z-10">
+        Next <ArrowRight size={22} />
       </PrimaryBtn>
+      {showUnlock && lesson && (
+        <LessonUnlockOverlay currentLessonId={lesson.id} onContinue={onDone} />
+      )}
     </div>
   );
 }

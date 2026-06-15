@@ -20,7 +20,7 @@ const KEY = (import.meta as any).env?.VITE_ELEVENLABS_API_KEY as string | undefi
 const DEFAULT_VOICE = ((import.meta as any).env?.VITE_ELEVENLABS_VOICE_ID as string | undefined)
   ?? "gwN3hEbGhE9zHBbp2V10"; // Lexio Teacher (fallback if env var missing)
 const MODEL_ID = ((import.meta as any).env?.VITE_ELEVENLABS_MODEL_ID as string | undefined)
-  ?? "eleven_turbo_v2_5"; // fast + crisp; good for kids' phonics
+  ?? "eleven_multilingual_v2"; // highest quality — best for sustained sounds & isolated phonemes
 
 const blobCache = new Map<string, Promise<Blob>>();
 let currentAudio: HTMLAudioElement | null = null;
@@ -36,12 +36,12 @@ async function fetchElevenLabs(text: string, opts: TTSOpts): Promise<Blob> {
     text,
     model_id: MODEL_ID,
     voice_settings: {
-      stability: 0.65,        // higher = steadier on sustained sounds
-      similarity_boost: 0.85, // stay close to the cloned voice
-      style: 0.0,             // neutral tone — best for teaching
+      stability: 0.8,         // higher = steadier on sustained sounds like "ssssss"
+      similarity_boost: 0.95, // stay very close to the cloned voice — kills the "off" sounds
+      style: 0.15,            // tiny bit of expressiveness so it doesn't sound flat
       use_speaker_boost: true,
-      // Map our rate (0.5–1.5) to ElevenLabs' speed range (~0.7–1.2).
-      speed: Math.max(0.7, Math.min(1.2, opts.rate ?? 1)),
+      // Clamp speed tightly — too slow → mushy, too fast → robotic.
+      speed: Math.max(0.85, Math.min(1.1, opts.rate ?? 1)),
     },
   };
   const resp = await fetch(
