@@ -3,6 +3,32 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export type TextSize = "small" | "medium" | "large";
 
+// ─── Difficulty tier ──────────────────────────────────────────────────────────
+// Coarse age-cohort setting that controls word complexity, number of letter
+// tiles in build games, and lesson pacing. Set from age at onboarding, then
+// nudge-able by the adaptive engine when the kid blows through the ceiling
+// (or hits a wall) of the per-tier difficulty band.
+//   foundational → ages 4–5    (short CVC, 2–3 tiles, slow pacing)
+//   developing   → ages 6–7    (CVC + simple blends, 3–4 tiles, medium pacing)
+//   advanced     → ages 8+     (blends, digraphs, multisyllabic, 4–5 tiles, brisk)
+export type DifficultyTier = "foundational" | "developing" | "advanced";
+
+const TIER_ORDER: DifficultyTier[] = ["foundational", "developing", "advanced"];
+
+export function tierForAge(age: number | null): DifficultyTier {
+  if (age == null) return "developing";
+  if (age <= 5) return "foundational";
+  if (age <= 7) return "developing";
+  return "advanced";
+}
+
+function bumpTier(tier: DifficultyTier, direction: "up" | "down"): DifficultyTier {
+  const i = TIER_ORDER.indexOf(tier);
+  const delta = direction === "up" ? 1 : -1;
+  const next = Math.max(0, Math.min(TIER_ORDER.length - 1, i + delta));
+  return TIER_ORDER[next];
+}
+
 // Day = YYYY-MM-DD in local time
 const todayKey = () => {
   const d = new Date();
@@ -44,12 +70,16 @@ type State = {
   // Adaptive difficulty (lightweight running counters)
   hitsInARow: number;
   missesInARow: number;
-  difficultyLevel: 1 | 2 | 3; // 1=easy, 2=med, 3=hard
-  set: (patch: Partial<Omit<State, "set" | "addXp" | "completeLesson" | "reset" | "recordHit" | "recordMiss">>) => void;
+  difficultyLevel: 1 | 2 | 3; // word complexity WITHIN the current tier
+  difficultyTier: DifficultyTier; // coarse cohort — see DifficultyTier comment
+  set: (patch: Partial<Omit<State, "set" | "addXp" | "completeLesson" | "reset" | "recordHit" | "recordMiss" | "nudgeTier">>) => void;
   addXp: (n: number) => void;
   completeLesson: (phoneme: string, xp: number) => LessonResult;
   recordHit: () => void;
   recordMiss: () => void;
+  // Manual tier nudge — call from adaptive engine, parent dashboard override,
+  // or tests. Always safe; clamps at the ends.
+  nudgeTier: (direction: "up" | "down") => void;
   reset: () => void;
 };
 
@@ -73,6 +103,7 @@ export const useStore = create<State>()(
       hitsInARow: 0,
       missesInARow: 0,
       difficultyLevel: 2,
+      difficultyTier: "developing",
       set: (patch) => set(patch),
       addXp: (n) => set((s) => ({ xp: s.xp + n })),
       completeLesson: (phoneme, xp) => {
@@ -131,22 +162,58 @@ export const useStore = create<State>()(
       },
       recordHit: () =>
         set((s) => {
-          const next = { hitsInARow: s.hitsInARow + 1, missesInARow: 0, difficultyLevel: s.difficultyLevel };
-          if (next.hitsInARow >= 5 && s.difficultyLevel < 3) {
-            next.difficultyLevel = (s.difficultyLevel + 1) as 1 | 2 | 3;
-            next.hitsInARow = 0;
+          const next: Partial<State> = {
+            hitsInARow: s.hitsInARow + 1,
+            missesInARow: 0,
+            difficultyLevel: s.difficultyLevel,
+            difficultyTier: s.difficultyTier,
+          };
+          if ((next.hitsInARow ?? 0) >= 5) {
+            if (s.difficultyLevel < 3) {
+              // Headroom within the current tier — bump word complexity.
+              next.difficultyLevel = (s.difficultyLevel + 1) as 1 | 2 | 3;
+              next.hitsInARow = 0;
+            } else if (s.difficultyTier !== "advanced") {
+              // Already at the ceiling of this tier and still acing it →
+              // promote to the next tier and reset complexity to its floor.
+              next.difficultyTier = bumpTier(s.difficultyTier, "up");
+              next.difficultyLevel = 1;
+              next.hitsInARow = 0;
+            }
           }
           return next;
         }),
       recordMiss: () =>
         set((s) => {
-          const next = { missesInARow: s.missesInARow + 1, hitsInARow: 0, difficultyLevel: s.difficultyLevel };
-          if (next.missesInARow >= 3 && s.difficultyLevel > 1) {
-            next.difficultyLevel = (s.difficultyLevel - 1) as 1 | 2 | 3;
-            next.missesInARow = 0;
+          const next: Partial<State> = {
+            missesInARow: s.missesInARow + 1,
+            hitsInARow: 0,
+            difficultyLevel: s.difficultyLevel,
+            difficultyTier: s.difficultyTier,
+          };
+          if ((next.missesInARow ?? 0) >= 3) {
+            if (s.difficultyLevel > 1) {
+              // Headroom within the current tier — drop word complexity.
+              next.difficultyLevel = (s.difficultyLevel - 1) as 1 | 2 | 3;
+              next.missesInARow = 0;
+            } else if (s.difficultyTier !== "foundational") {
+              // Already at the floor of this tier and still missing →
+              // demote to the previous tier and reset complexity to its ceiling.
+              next.difficultyTier = bumpTier(s.difficultyTier, "down");
+              next.difficultyLevel = 3;
+              next.missesInARow = 0;
+            }
           }
           return next;
         }),
+      nudgeTier: (direction) =>
+        set((s) => ({
+          difficultyTier: bumpTier(s.difficultyTier, direction),
+          // Reset the per-tier complexity to a neutral starting point.
+          difficultyLevel: 2,
+          hitsInARow: 0,
+          missesInARow: 0,
+        })),
       reset: () =>
         set({
           name: "",
@@ -166,6 +233,7 @@ export const useStore = create<State>()(
           hitsInARow: 0,
           missesInARow: 0,
           difficultyLevel: 2,
+          difficultyTier: "developing",
         }),
     }),
     {

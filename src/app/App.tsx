@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { TouchBackend } from "react-dnd-touch-backend";
-import { useStore, type LessonResult, pickWord, WORD_BANK } from "../store";
+import { useStore, type LessonResult, pickWord, WORD_BANK, tierForAge } from "../store";
 import { playTTS, playSequence, cancelTTS, playPhonemeFile } from "../services/tts";
 import { TraceLetter } from "../components/TraceLetter";
 
@@ -920,7 +920,7 @@ function OnboardingFlow({ onDone }: { onDone: () => void }) {
   const setStore = useStore(s => s.set);
   const [name, setName] = useState(storeName);
   const [age, setAge] = useState<number | null>(storeAge);
-  const ages = [6, 7, 8, 9, 10, 11, 12, "13+"];
+  const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12, "13+"];
   const allMascots = [
     { Comp: Lexi, name: "Lexi", desc: "Your guide", color: C.lexi },
     { Comp: Echo, name: "Echo", desc: "Listens with you", color: C.teal },
@@ -930,7 +930,15 @@ function OnboardingFlow({ onDone }: { onDone: () => void }) {
   ];
   const next = () => {
     if (step < 2) { setStep(step + 1); return; }
-    setStore({ name: name.trim(), age, onboarded: true });
+    // Derive the starting difficulty tier from age. The adaptive engine
+    // (recordHit / recordMiss in the store) can nudge it up or down later
+    // based on actual performance.
+    setStore({
+      name: name.trim(),
+      age,
+      difficultyTier: tierForAge(age),
+      onboarded: true,
+    });
     onDone();
   };
   return (
@@ -1972,6 +1980,17 @@ function DropSlot({
 }
 
 function BuildItStep({ onNext, lesson, onCorrect, onWrong }: { onNext: () => void; lesson: LessonData; onCorrect?: () => void; onWrong?: () => void }) {
+  // ── Difficulty tier read site #2 ─────────────────────────────────────────
+  // Subscribe so this component re-renders if the adaptive engine nudges the
+  // tier mid-session. Not yet used to alter behavior — wiring only.
+  // TODO: when the tier-aware Build game lands, derive the tile bank from
+  // this. Sketch:
+  //   foundational → slots = first 2–3 letters, distractors = 0
+  //   developing   → slots = full word, distractors = 1
+  //   advanced     → slots = full word, distractors = 2–3, randomized order
+  const difficultyTier = useStore(s => s.difficultyTier);
+  void difficultyTier; // silence unused-var lint until games consume it
+
   const slots = useMemo(() => lesson.buildSlots, [lesson]);
   const [filled, setFilled] = useState<(null | { tileIdx: number; letter: string })[]>(() => new Array(lesson.buildSlots.length).fill(null));
   const [shake, setShake] = useState(false);
@@ -2996,6 +3015,13 @@ function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onO
   const streak = useStore(s => s.streak);
   const lessonsCompleted = useStore(s => s.lessonsCompleted);
   const masteredCount = useStore(s => s.masteredPhonemes.length);
+  // ── Difficulty tier read site #1: visible to user in the Profile card ─────
+  const difficultyTier = useStore(s => s.difficultyTier);
+  const tierLabel: Record<"foundational" | "developing" | "advanced", string> = {
+    foundational: "Foundational · Ages 4–5",
+    developing:   "Developing · Ages 6–7",
+    advanced:     "Advanced · Ages 8+",
+  };
   const setStore = useStore(s => s.set);
   const reset = useStore(s => s.reset);
   const setTextSize = (v: "small" | "medium" | "large") => setStore({ textSize: v });
@@ -3024,12 +3050,16 @@ function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onO
             <div>
               <div style={{ fontSize: 20, fontWeight: 700, color: C.ink }}>{name}</div>
               <div style={{ fontSize: 12, color: C.muted }}>Level {Math.max(1, Math.floor(xp / 500))} · Sound Explorer</div>
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-2 flex-wrap">
                 <div style={{ padding: "4px 10px", borderRadius: 8, background: C.primary, color: "white", fontSize: 11, fontWeight: 700 }}>
                   {xp.toLocaleString()} XP
                 </div>
                 <div style={{ padding: "4px 10px", borderRadius: 8, background: C.amberSoft, color: C.amber, fontSize: 11, fontWeight: 700 }}>
                   🔥 {streak} days
+                </div>
+                {/* Difficulty tier chip — visible read site so it's obvious the wiring works */}
+                <div style={{ padding: "4px 10px", borderRadius: 8, background: C.tealSoft, color: C.teal, fontSize: 11, fontWeight: 700 }}>
+                  📚 {tierLabel[difficultyTier]}
                 </div>
               </div>
             </div>
