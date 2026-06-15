@@ -116,7 +116,7 @@ function speakLesson(phoneme: string, word: string) {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Screen = "splash" | "onboard" | "home" | "learn" | "lesson" | "progress" | "rewards" | "profile" | "parent";
+type Screen = "splash" | "onboard" | "home" | "learn" | "games" | "lesson" | "progress" | "rewards" | "profile" | "parent";
 type LessonStep = "hear" | "see" | "trace" | "say" | "build" | "win";
 type Tab = "home" | "learn" | "progress" | "rewards" | "profile";
 type MicState = "idle" | "listening" | "processing" | "encourage";
@@ -2606,6 +2606,371 @@ function WinScreen({ onDone, variant = "small", lesson, comboMax }: { onDone: ()
   );
 }
 
+// ─── Games Grid Screen ────────────────────────────────────────────────────────
+// Kid-facing "pick a game" surface for a single lesson. Every tile teaches the
+// same target phoneme (the lesson's phoneme). Two tiles are wired to real
+// games (Trace It, Word Builder); the rest are visible-but-locked "Coming
+// Soon" tiles so the grid feels full and the roadmap is obvious.
+//
+// Internally manages three views:
+//   "grid"    → tile grid + Finish Lesson CTA
+//   "playing" → renders a single game with a back chevron
+//   "win"     → existing WinScreen + LessonUnlockOverlay flow
+type GameKey = "trace" | "build" | "sound-match" | "listening-lab" | "spell-it" | "read-aloud";
+
+type GameTile = {
+  key: GameKey;
+  title: string;
+  subtitle: string;
+  emoji: string;
+  gradient: [string, string];
+  status: "active" | "coming";
+};
+
+function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (lessonId: string) => void }) {
+  const lesson = LESSONS[lessonId] ?? LESSONS["sh-sound"];
+
+  // Local view state
+  const [view, setView] = useState<"grid" | "playing" | "win">("grid");
+  const [activeGame, setActiveGame] = useState<GameKey | null>(null);
+  const [completed, setCompleted] = useState<Set<GameKey>>(new Set());
+  const [comingSoonKey, setComingSoonKey] = useState<GameKey | null>(null);
+
+  // Combo + adaptive signals — kept here so multiple games in one session
+  // share the same combo counter. Mirrors LessonScreen's wiring.
+  const [combo, setCombo] = useState(0);
+  const [comboMax, setComboMax] = useState(0);
+  const [comboKey, setComboKey] = useState(0);
+  const recordHit = useStore(s => s.recordHit);
+  const recordMiss = useStore(s => s.recordMiss);
+  const onCorrect = useCallback(() => {
+    setCombo(c => {
+      const n = c + 1;
+      setComboMax(m => (n > m ? n : m));
+      return n;
+    });
+    setComboKey(k => k + 1);
+    recordHit();
+  }, [recordHit]);
+  const onWrong = useCallback(() => {
+    setCombo(0);
+    recordMiss();
+  }, [recordMiss]);
+
+  // Tile catalog — order matters for the 2×3 grid layout
+  const tiles: GameTile[] = [
+    { key: "trace",         title: "Trace It",      subtitle: "Write the letter",  emoji: "✍️", gradient: [C.glow,  C.glowDark],         status: "active" },
+    { key: "build",         title: "Word Builder",  subtitle: "Build the word",    emoji: "🧱", gradient: [C.amber, "#E8772E"],          status: "active" },
+    { key: "sound-match",   title: "Sound Match",   subtitle: "Find the match",    emoji: "🎯", gradient: [C.teal,  C.echoDark],         status: "coming" },
+    { key: "listening-lab", title: "Listening Lab", subtitle: "Hear & pick",       emoji: "👂", gradient: [C.primary, C.primaryDark],    status: "coming" },
+    { key: "spell-it",      title: "Spell It",      subtitle: "Spell the word",    emoji: "🔤", gradient: [C.blush, "#E8729B"],          status: "coming" },
+    { key: "read-aloud",    title: "Read Aloud",    subtitle: "Read it out!",      emoji: "📖", gradient: [C.sky,   "#5092C7"],          status: "coming" },
+  ];
+
+  const playableCount = tiles.filter(t => t.status === "active").length;
+  const playedCount = [...completed].filter(k => tiles.find(t => t.key === k)?.status === "active").length;
+  const allDone = playedCount >= playableCount;
+
+  const openTile = (tile: GameTile) => {
+    if (tile.status === "coming") {
+      setComingSoonKey(tile.key);
+      setTimeout(() => setComingSoonKey(prev => (prev === tile.key ? null : prev)), 1400);
+      return;
+    }
+    setActiveGame(tile.key);
+    setView("playing");
+  };
+
+  const finishGame = () => {
+    if (activeGame) {
+      setCompleted(prev => {
+        const n = new Set(prev);
+        n.add(activeGame);
+        return n;
+      });
+    }
+    setActiveGame(null);
+    setView("grid");
+  };
+
+  // ── Sub-view: playing a single game ───────────────────────────────────────
+  if (view === "playing" && activeGame) {
+    const tile = tiles.find(t => t.key === activeGame)!;
+    return (
+      <div className="flex flex-col h-full" style={{ background: C.bg, fontFamily: uiFont }}>
+        <div className="flex items-center gap-3 px-5 pt-12 pb-4">
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={() => { setActiveGame(null); setView("grid"); }}
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              background: C.primarySoft,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "none", cursor: "pointer",
+            }}
+            aria-label="Back to games"
+          >
+            <ChevronLeft size={22} color={C.primary} />
+          </motion.button>
+          <div className="flex-1">
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase" }}>
+              {lesson.phoneme} Sound
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.ink, lineHeight: 1.1 }}>
+              {tile.title}
+            </div>
+          </div>
+        </div>
+        {/* Combo chip — appears after 2+ correct answers in a row */}
+        {combo >= 2 && (
+          <div className="px-5 pb-2 flex justify-center" style={{ marginTop: -8 }}>
+            <motion.div
+              key={comboKey}
+              initial={{ scale: 0.6, opacity: 0, y: -8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 18 }}
+              style={{
+                background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+                color: "white", borderRadius: 14,
+                padding: "5px 12px", fontSize: 12, fontWeight: 700,
+                fontFamily: uiFont,
+                boxShadow: "0 4px 12px rgba(93,202,165,0.35)",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              🔥 {combo} in a row!
+            </motion.div>
+          </div>
+        )}
+        <div className="flex-1 overflow-hidden">
+          {activeGame === "trace" && (
+            <TraceItStep onNext={finishGame} lesson={lesson} />
+          )}
+          {activeGame === "build" && (
+            <DndProvider backend={DndBackend} options={isTouch ? { enableMouseEvents: true } : undefined}>
+              <BuildItStep onNext={finishGame} lesson={lesson} onCorrect={onCorrect} onWrong={onWrong} />
+            </DndProvider>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Sub-view: lesson celebration / unlock animation ───────────────────────
+  if (view === "win") {
+    return (
+      <WinScreen
+        onDone={() => onExit(lessonId)}
+        variant={lesson.isBoss ? "level" : "small"}
+        lesson={lesson}
+        comboMax={comboMax}
+      />
+    );
+  }
+
+  // ── Main view: the game tile grid ─────────────────────────────────────────
+  return (
+    <div
+      className="flex flex-col h-full"
+      style={{
+        fontFamily: uiFont,
+        background: `linear-gradient(180deg, ${C.primarySoft} 0%, ${C.bg} 35%)`,
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 pt-12 pb-3">
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => onExit("")}
+          style={{
+            width: 44, height: 44, borderRadius: 22,
+            background: C.white,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "none", cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(108,71,255,0.15)",
+          }}
+          aria-label="Back to learning path"
+        >
+          <ChevronLeft size={22} color={C.primary} />
+        </motion.button>
+        <div className="flex-1">
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+            Today's Sound
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.ink, lineHeight: 1.1 }}>
+            Pick a game!
+          </div>
+        </div>
+        {/* Phoneme badge */}
+        <div
+          style={{
+            minWidth: 60, height: 60, borderRadius: 18, padding: "0 14px",
+            background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+            color: "white", display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 900, fontSize: 26,
+            boxShadow: `0 6px 18px rgba(108,71,255,0.4)`,
+          }}
+        >
+          {lesson.phoneme}
+        </div>
+      </div>
+
+      {/* Sub-header — playful prompt + progress chip */}
+      <div className="px-5 pb-4 flex items-center justify-between">
+        <div style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>
+          Every game teaches the <strong style={{ color: C.primary }}>{lesson.phoneme}</strong> sound.
+        </div>
+        <div
+          style={{
+            padding: "4px 10px", borderRadius: 10,
+            background: allDone ? C.tealSoft : C.primarySoft,
+            color: allDone ? C.teal : C.primary,
+            fontSize: 11, fontWeight: 800,
+          }}
+        >
+          {playedCount}/{playableCount}
+        </div>
+      </div>
+
+      {/* Tile grid — 2 columns */}
+      <div className="flex-1 overflow-y-auto px-5 pb-4">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 14,
+          }}
+        >
+          {tiles.map((t, i) => {
+            const isDone = completed.has(t.key);
+            const isLocked = t.status === "coming";
+            const isWiggling = comingSoonKey === t.key;
+            return (
+              <motion.button
+                key={t.key}
+                initial={{ scale: 0.85, opacity: 0, y: 12 }}
+                animate={
+                  isWiggling
+                    ? { scale: 1, opacity: 1, y: 0, x: [0, -6, 6, -6, 6, 0] }
+                    : { scale: 1, opacity: 1, y: 0 }
+                }
+                transition={{ delay: i * 0.05, type: "spring", bounce: 0.4 }}
+                whileTap={{ scale: 0.94 }}
+                onClick={() => openTile(t)}
+                style={{
+                  position: "relative",
+                  border: "none", cursor: "pointer",
+                  background: isLocked
+                    ? "linear-gradient(135deg, #DDD7EA, #C7BEDA)"
+                    : `linear-gradient(135deg, ${t.gradient[0]}, ${t.gradient[1]})`,
+                  borderRadius: 22,
+                  padding: "18px 14px 14px",
+                  textAlign: "left",
+                  color: "white",
+                  display: "flex", flexDirection: "column", gap: 6,
+                  aspectRatio: "1 / 1.05",
+                  boxShadow: isLocked
+                    ? "0 4px 10px rgba(0,0,0,0.06)"
+                    : `0 10px 24px ${t.gradient[1]}55`,
+                  overflow: "hidden",
+                  fontFamily: uiFont,
+                }}
+              >
+                {/* Decorative blob */}
+                <div
+                  style={{
+                    position: "absolute", top: -30, right: -30,
+                    width: 100, height: 100, borderRadius: 50,
+                    background: "rgba(255,255,255,0.18)",
+                  }}
+                />
+                {/* Status badge — done or coming-soon */}
+                {isDone && (
+                  <div
+                    style={{
+                      position: "absolute", top: 10, right: 10,
+                      width: 26, height: 26, borderRadius: 13,
+                      background: "white",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                    }}
+                  >
+                    <Check size={16} color={C.teal} strokeWidth={3} />
+                  </div>
+                )}
+                {isLocked && (
+                  <div
+                    style={{
+                      position: "absolute", top: 10, right: 10,
+                      padding: "3px 8px", borderRadius: 10,
+                      background: "rgba(255,255,255,0.7)",
+                      color: C.ink, fontSize: 9, fontWeight: 800,
+                      letterSpacing: 0.5, textTransform: "uppercase",
+                    }}
+                  >
+                    Soon
+                  </div>
+                )}
+                {/* Emoji icon */}
+                <div style={{ fontSize: 38, lineHeight: 1, marginTop: 6 }}>{t.emoji}</div>
+                {/* Title + subtitle */}
+                <div style={{ marginTop: "auto" }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.15 }}>{t.title}</div>
+                  <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2, fontWeight: 600 }}>{t.subtitle}</div>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+
+        {/* Helper text */}
+        <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 18, lineHeight: 1.5 }}>
+          Play one or play them all — every game makes you stronger.<br />
+          More games are on the way! 🚀
+        </div>
+      </div>
+
+      {/* Finish Lesson CTA */}
+      <div className="px-5 pb-5 pt-2">
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          animate={allDone ? { scale: [1, 1.04, 1] } : {}}
+          transition={allDone ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 }}
+          onClick={() => setView("win")}
+          disabled={playedCount === 0}
+          style={{
+            width: "100%", padding: "16px 24px",
+            borderRadius: 20, border: "none",
+            background: playedCount === 0
+              ? "#E0DDEC"
+              : allDone
+                ? `linear-gradient(135deg, ${C.yellow}, ${C.amber})`
+                : `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+            color: playedCount === 0 ? C.muted : C.ink,
+            fontWeight: 800, fontSize: 17,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: playedCount === 0
+              ? "none"
+              : allDone
+                ? `0 10px 28px rgba(255,204,0,0.4)`
+                : `0 10px 28px rgba(108,71,255,0.35)`,
+            cursor: playedCount === 0 ? "not-allowed" : "pointer",
+            fontFamily: uiFont,
+            transition: "all 0.25s",
+          }}
+        >
+          {playedCount === 0
+            ? "Play a game first"
+            : allDone
+              ? "🎉 Finish Lesson!"
+              : "Finish Lesson"}
+          {playedCount > 0 && <ArrowRight size={20} />}
+        </motion.button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Lesson Player Shell ──────────────────────────────────────────────────────
 function LessonScreen({ onDone, lessonId }: { onDone: (lessonId: string) => void; lessonId: string }) {
   const lesson = LESSONS[lessonId] ?? LESSONS["sh-sound"];
@@ -3868,7 +4233,10 @@ export default function App() {
       return first?.id ?? "sh-sound";
     })();
     setCurrentLessonId(targetId);
-    setScreen("lesson");
+    // Picking a lesson now lands on the GamesGridScreen ("games" route),
+    // which lets the kid pick which game to play. The legacy multi-step
+    // "lesson" route still works if invoked directly.
+    setScreen("games");
   };
 
   const handleLessonDone = (lessonId: string) => {
@@ -3928,6 +4296,7 @@ export default function App() {
           {screen === "onboard" && <OnboardingFlow onDone={() => { setScreen("home"); setTab("home"); }} />}
           {screen === "home" && <HomeScreen onStartLesson={() => handleStartLesson()} onTabChange={handleTabChange} />}
           {screen === "learn" && <LearnScreen onStartLesson={(id) => handleStartLesson(id)} />}
+          {screen === "games" && <GamesGridScreen lessonId={currentLessonId} onExit={handleLessonDone} />}
           {screen === "lesson" && <LessonScreen onDone={handleLessonDone} lessonId={currentLessonId} />}
           {screen === "progress" && <ProgressScreen />}
           {screen === "rewards" && <RewardsScreen />}
