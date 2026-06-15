@@ -1977,16 +1977,15 @@ function BuildItStep({ onNext, lesson, onCorrect, onWrong }: { onNext: () => voi
   const [shake, setShake] = useState(false);
   const [wrongHint, setWrongHint] = useState<string | null>(null);
   const isCorrect = filled.every(f => f !== null);
-  // Emit combo hit once the word is fully built
+  // Emit combo hit once the word is fully built — but DON'T auto-advance.
+  // The user explicitly taps Next so they can hear/admire their work.
   const reportedRef = useRef(false);
   useEffect(() => {
     if (isCorrect && !reportedRef.current) {
       reportedRef.current = true;
       onCorrect?.();
-      const t = setTimeout(onNext, 1800);
-      return () => clearTimeout(t);
     }
-  }, [isCorrect, onNext, onCorrect]);
+  }, [isCorrect, onCorrect]);
   const usedIdxs = new Set(filled.filter(Boolean).map(f => f!.tileIdx));
   const dropAt = (slotIdx: number, item: { idx: number; letter: string }) => {
     if (filled[slotIdx]) return false;
@@ -2057,23 +2056,41 @@ function BuildItStep({ onNext, lesson, onCorrect, onWrong }: { onNext: () => voi
             {wrongHint}
           </motion.div>
         )}
-        {/* Tile bank (draggable) */}
-        <div className="flex flex-wrap justify-center gap-3">
-          {lesson.buildTiles.map((letter, i) => (
-            <DragTile
-              key={i}
-              idx={i}
-              letter={letter}
-              used={usedIdxs.has(i)}
-              disabled={isCorrect}
-            />
-          ))}
-        </div>
-        <div style={{ fontSize: 11, color: C.muted, marginTop: -4 }}>
-          Drag a sound into the matching box
-        </div>
+        {/* Tile bank (draggable) — hidden once correct so the Next button takes center stage */}
+        {!isCorrect && (
+          <>
+            <div className="flex flex-wrap justify-center gap-3">
+              {lesson.buildTiles.map((letter, i) => (
+                <DragTile
+                  key={i}
+                  idx={i}
+                  letter={letter}
+                  used={usedIdxs.has(i)}
+                  disabled={isCorrect}
+                />
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: -4 }}>
+              Drag a sound into the matching box
+            </div>
+          </>
+        )}
       </div>
-      <div style={{ height: 56 }} />
+      {/* Next button — only after the word is fully built */}
+      {isCorrect ? (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, type: "spring", bounce: 0.4 }}
+          style={{ width: "100%" }}
+        >
+          <PrimaryBtn onClick={onNext} className="w-full text-xl">
+            Next <ArrowRight size={22} />
+          </PrimaryBtn>
+        </motion.div>
+      ) : (
+        <div style={{ height: 56 }} />
+      )}
     </div>
   );
 }
