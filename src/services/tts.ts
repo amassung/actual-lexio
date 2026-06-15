@@ -156,16 +156,24 @@ export async function playTTS(text: string, opts: TTSOpts = {}): Promise<void> {
 }
 
 // ─── Phoneme audio files ──────────────────────────────────────────────────────
-// Tries to play a recorded phoneme sound from /audio/phonemes/{key}.mp3.
-// Resolves with `true` on success; `false` if the file is missing or fails
-// to play (caller should fall back to TTS).
+// DISABLED: We now use the ElevenLabs cloned voice ("Lexio Teacher") for ALL
+// audio — including isolated phonemes — so the voice is consistent everywhere.
 //
-// Drop human-recorded clips into public/audio/phonemes/ named by the phoneme
-// key (lowercase, no symbols): m.mp3, t.mp3, sh.mp3, etc. They'll be used in
-// preference to TTS, which is fundamentally limited for isolated phonemes.
+// The old recordings in public/audio/phonemes/ were made by a different
+// speaker and would clash with the cloned voice if mixed in. To re-enable
+// the phoneme-file shortcut later (e.g. after regenerating the clips IN the
+// cloned voice for extra crispness), delete the early-return below.
 const phonemeFileCache = new Map<string, "missing" | "ok">();
 
-export async function playPhonemeFile(key: string): Promise<boolean> {
+export async function playPhonemeFile(_key: string): Promise<boolean> {
+  // Force TTS path so every sound comes from the cloned voice.
+  return false;
+}
+
+// Keep the original implementation around (dead code) so we can flip it back
+// on quickly if we record new phonemes in the cloned voice. To re-enable,
+// rename this to playPhonemeFile and delete the stub above.
+async function _playPhonemeFileImpl(key: string): Promise<boolean> {
   const k = key.toLowerCase();
   if (phonemeFileCache.get(k) === "missing") return false;
   const url = `/audio/phonemes/${k}.mp3`;
