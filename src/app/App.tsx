@@ -139,6 +139,91 @@ type LessonData = {
   isBoss?: boolean;
 };
 
+// ─── Word pools for the new mini-games ────────────────────────────────────────
+// All three new games (Flashcards, Listen Up, Fill the Blank) need a list of
+// "words that teach this phoneme". The existing LessonData only carries one
+// word per lesson, which is enough for Trace/Build but not for variety in
+// repeat-play games. Pools are keyed by lesson id; if a lesson has no pool the
+// fallback is just the lesson's single word + emoji.
+const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
+  "m-sound":   [{ word: "mat", emoji: "🟫" }, { word: "moon", emoji: "🌙" }, { word: "mom", emoji: "👩" }, { word: "map", emoji: "🗺️" }],
+  "s-sound":   [{ word: "sun", emoji: "☀️" }, { word: "snake", emoji: "🐍" }, { word: "seal", emoji: "🦭" }, { word: "sit", emoji: "🪑" }],
+  "t-sound":   [{ word: "top", emoji: "🎩" }, { word: "ten", emoji: "🔟" }, { word: "tiger", emoji: "🐯" }, { word: "tap", emoji: "🚰" }],
+  "short-a":   [{ word: "apple", emoji: "🍎" }, { word: "ant", emoji: "🐜" }, { word: "hat", emoji: "👒" }, { word: "cat", emoji: "🐱" }],
+  "p-sound":   [{ word: "pig", emoji: "🐷" }, { word: "pen", emoji: "🖊️" }, { word: "pan", emoji: "🍳" }, { word: "pot", emoji: "🍯" }],
+  "n-sound":   [{ word: "nose", emoji: "👃" }, { word: "nest", emoji: "🪺" }, { word: "net", emoji: "🥅" }, { word: "nine", emoji: "9️⃣" }],
+  "short-i":   [{ word: "ink", emoji: "🖋️" }, { word: "pig", emoji: "🐷" }, { word: "fish", emoji: "🐟" }, { word: "pin", emoji: "📌" }],
+  "short-e":   [{ word: "egg", emoji: "🥚" }, { word: "bed", emoji: "🛏️" }, { word: "pen", emoji: "🖊️" }, { word: "red", emoji: "🟥" }],
+  "short-o":   [{ word: "octopus", emoji: "🐙" }, { word: "hot", emoji: "🔥" }, { word: "log", emoji: "🪵" }, { word: "fox", emoji: "🦊" }],
+  "short-u":   [{ word: "umbrella", emoji: "☂️" }, { word: "bug", emoji: "🐛" }, { word: "cup", emoji: "☕" }, { word: "sun", emoji: "☀️" }],
+  "sh-sound":  [{ word: "ship", emoji: "🚢" }, { word: "shell", emoji: "🐚" }, { word: "fish", emoji: "🐟" }, { word: "sheep", emoji: "🐑" }],
+  "ch-sound":  [{ word: "chip", emoji: "🍟" }, { word: "chair", emoji: "🪑" }, { word: "cheese", emoji: "🧀" }, { word: "cherry", emoji: "🍒" }],
+  "th-sound":  [{ word: "thumb", emoji: "👍" }, { word: "three", emoji: "3️⃣" }, { word: "bath", emoji: "🛁" }, { word: "teeth", emoji: "🦷" }],
+};
+
+// ─── Crisp phoneme playback ───────────────────────────────────────────────────
+// ElevenLabs (and all general-purpose TTS) tends to add a phantom vowel to
+// isolated consonants ("suh" for "s", "muh" for "m") and clip sustained
+// sounds short. The fix is to send the IPA phoneme with a length mark (ːː)
+// inside ElevenLabs' phoneme tag — the cloned voice then sustains the actual
+// articulation. Used by Sound Match (isolated phoneme target).
+const IPA_FOR_PHONEME: Record<string, string> = {
+  m: "mːː", s: "sːː", n: "nːː", f: "fːː", l: "lːː", r: "ɹːː", z: "zːː", v: "vːː",
+  t: "t", p: "p", b: "b", d: "d", g: "g", h: "h", k: "k", w: "w", y: "j", j: "dʒ",
+  a: "æːː", e: "ɛːː", i: "ɪːː", o: "ɑːː", u: "ʌːː",
+  sh: "ʃːː", ch: "tʃ", th: "θːː", ng: "ŋ",
+};
+function speakPhonemeSound(letters: string, rate = 0.85): Promise<void> {
+  const lower = letters.toLowerCase();
+  const ipa = IPA_FOR_PHONEME[lower];
+  if (!ipa) return playTTS(letters, { rate });
+  return playTTS(`<phoneme alphabet="ipa" ph="${ipa}">${letters}</phoneme>`, { rate });
+}
+
+function wordsForLesson(lesson: LessonData): { word: string; emoji: string }[] {
+  const pool = WORD_POOLS[lesson.id];
+  if (pool && pool.length) return pool;
+  return [{ word: lesson.word, emoji: lesson.wordEmoji }];
+}
+
+// Pick `count` random word+emoji entries that are NOT `excluded.word`.
+// Falls back to other lessons' pools if the current lesson's pool is too small.
+function pickDistractorWords(currentLessonId: string, exclude: string, count: number): { word: string; emoji: string }[] {
+  const same = (WORD_POOLS[currentLessonId] ?? []).filter(w => w.word !== exclude);
+  const others = Object.entries(WORD_POOLS)
+    .filter(([k]) => k !== currentLessonId)
+    .flatMap(([, words]) => words)
+    .filter(w => w.word !== exclude);
+  const combined = [...same, ...others];
+  const shuffled = [...combined].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+// Common phoneme tokens used as distractors in Fill the Blank.
+const COMMON_PHONEME_TOKENS = ["m", "s", "t", "p", "n", "a", "i", "e", "o", "u", "b", "f", "l", "r", "sh", "ch", "th"];
+
+function pickDistractorLetters(correct: string, count: number): string[] {
+  const lower = correct.toLowerCase();
+  const pool = COMMON_PHONEME_TOKENS.filter(p => p !== lower);
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+// Blank out the phoneme inside the word. If the phoneme doesn't appear,
+// fall back to blanking the first letter so the game still works.
+function maskWord(word: string, phoneme: string): { masked: string; missing: string } {
+  const lower = word.toLowerCase();
+  const ph = phoneme.toLowerCase();
+  const idx = lower.indexOf(ph);
+  if (idx === -1) {
+    return { masked: "_" + word.slice(1), missing: word[0] };
+  }
+  const before = word.slice(0, idx);
+  const blank = "_".repeat(ph.length);
+  const after = word.slice(idx + ph.length);
+  return { masked: before + blank + after, missing: word.slice(idx, idx + ph.length) };
+}
+
 const LESSONS: Record<string, LessonData> = {
   // ── Level 1: Structured Literacy sequence (m, s, t, short-a, p, n) ──────────
   "m-sound": {
@@ -2606,6 +2691,813 @@ function WinScreen({ onDone, variant = "small", lesson, comboMax }: { onDone: ()
   );
 }
 
+// ─── Mini-Game: Flashcards ────────────────────────────────────────────────────
+// Exposure / review game. Steps through 4 cards from the lesson's word pool.
+// Each card: emoji + word + speaker (auto-plays cloned voice once). Buttons:
+// "Show me 🤔" (replays audio) and "Got it! ✨" (advance).
+//
+// Accuracy tracking: each completed card counts as 1/1 (it's not a quiz; total
+// elapsed time and attempts are the more meaningful signals). The aggregate
+// accuracy in the store stays at 100% for this game — by design.
+function FlashcardsGame({ lesson, onFinish, onCorrect }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const cards = useMemo(() => wordsForLesson(lesson).slice(0, 4), [lesson]);
+  const [idx, setIdx] = useState(0);
+  const card = cards[idx];
+  const isLast = idx >= cards.length - 1;
+
+  // Auto-play the word on each card change (cloned voice through tts service).
+  useEffect(() => {
+    if (!card) return;
+    cancelTTS();
+    const t = setTimeout(() => void playTTS(card.word, { rate: 0.9 }), 250);
+    return () => { clearTimeout(t); cancelTTS(); };
+  }, [card]);
+
+  const advance = () => {
+    onCorrect?.(); // 1/1 per card → 100% accuracy by design
+    if (isLast) { onFinish(); return; }
+    setIdx(i => i + 1);
+  };
+  const replay = () => { if (card) void playTTS(card.word, { rate: 0.85 }); };
+
+  // wordsForLesson always returns ≥1 item, so `card` is guaranteed.
+  // No defensive branch needed — keep hooks unconditional.
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Progress dots */}
+      <div className="flex gap-2 mb-2">
+        {cards.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === idx ? 24 : 8, height: 8, borderRadius: 4,
+              background: i <= idx ? C.glow : C.primarySoft,
+              transition: "all 0.3s",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Card */}
+      <motion.div
+        key={idx}
+        initial={{ scale: 0.9, opacity: 0, y: 14 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ type: "spring", bounce: 0.4 }}
+        style={{
+          width: "100%", maxWidth: 320,
+          background: `linear-gradient(135deg, ${C.yellowSoft}, ${C.glow}55)`,
+          borderRadius: 28, padding: "32px 24px 28px",
+          textAlign: "center",
+          boxShadow: `0 14px 36px rgba(255,209,102,0.35)`,
+          border: `3px solid ${C.glow}`,
+        }}
+      >
+        <div style={{ fontSize: 92, lineHeight: 1, marginBottom: 14 }}>{card.emoji}</div>
+        <div style={{ fontSize: 44, fontWeight: 900, color: C.ink, letterSpacing: 1 }}>{card.word}</div>
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={replay}
+          style={{
+            marginTop: 18, padding: "10px 18px", borderRadius: 24,
+            background: "rgba(255,255,255,0.85)", border: "none",
+            display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer",
+            color: C.amber, fontWeight: 800, fontSize: 13,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+          }}
+        >
+          <Volume2 size={16} /> Hear it again
+        </motion.button>
+      </motion.div>
+
+      {/* Counter */}
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        Card {idx + 1} of {cards.length}
+      </div>
+
+      {/* Action button */}
+      <PrimaryBtn onClick={advance} className="w-full text-xl">
+        {isLast ? "Finish" : "Got it! ✨"} <ArrowRight size={22} />
+      </PrimaryBtn>
+    </div>
+  );
+}
+
+// ─── Mini-Game: Listen Up ─────────────────────────────────────────────────────
+// "Hear a word, pick the match." 4 rounds. Each round:
+//   1. Auto-play target word via cloned voice
+//   2. Show 3 word+emoji choices (target + 2 distractors), positions shuffled
+//   3. Tap → correct/wrong feedback → next round
+function ListenUpGame({ lesson, onFinish, onCorrect, onWrong }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const ROUNDS = 4;
+
+  const rounds = useMemo(() => {
+    const pool = wordsForLesson(lesson);
+    return Array.from({ length: ROUNDS }, () => {
+      const target = pool[Math.floor(Math.random() * pool.length)];
+      const distractors = pickDistractorWords(lesson.id, target.word, 2);
+      const choices = [target, ...distractors].sort(() => Math.random() - 0.5);
+      return { target, choices };
+    });
+  }, [lesson]);
+
+  const [round, setRound] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false); // prevents double-tap during feedback
+  const current = rounds[round];
+
+  // Auto-play target on round start
+  useEffect(() => {
+    if (!current) return;
+    setPicked(null); setLocked(false);
+    cancelTTS();
+    const t = setTimeout(() => void playTTS(current.target.word, { rate: 0.9 }), 280);
+    return () => { clearTimeout(t); cancelTTS(); };
+  }, [round, current]);
+
+  const replay = () => { if (current) void playTTS(current.target.word, { rate: 0.85 }); };
+
+  const onChoose = (word: string) => {
+    if (locked) return;
+    setLocked(true);
+    setPicked(word);
+    const isRight = word === current.target.word;
+    if (isRight) onCorrect?.(); else onWrong?.();
+    setTimeout(() => {
+      if (round + 1 >= ROUNDS) onFinish();
+      else setRound(r => r + 1);
+    }, 900);
+  };
+
+  if (!current) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Progress dots */}
+      <div className="flex gap-2 mb-2">
+        {rounds.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === round ? 24 : 8, height: 8, borderRadius: 4,
+              background: i <= round ? C.primary : C.primarySoft,
+              transition: "all 0.3s",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Listen button */}
+      <motion.button
+        whileTap={{ scale: 0.92 }}
+        onClick={replay}
+        style={{
+          width: 130, height: 130, borderRadius: 65, border: "none",
+          background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+          color: "white", cursor: "pointer",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 4,
+          boxShadow: `0 14px 36px rgba(108,71,255,0.45)`,
+        }}
+      >
+        <Volume2 size={42} />
+        <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1 }}>Tap to hear</div>
+      </motion.button>
+
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.muted, textAlign: "center" }}>
+        Which word did you hear?
+      </div>
+
+      {/* Choice tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, width: "100%" }}>
+        {current.choices.map((c) => {
+          const isPicked = picked === c.word;
+          const isCorrect = c.word === current.target.word;
+          const showRight = picked !== null && isCorrect;
+          const showWrong = isPicked && !isCorrect;
+          return (
+            <motion.button
+              key={c.word}
+              whileTap={{ scale: locked ? 1 : 0.93 }}
+              animate={showWrong ? { x: [0, -6, 6, -6, 6, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              onClick={() => onChoose(c.word)}
+              disabled={locked}
+              style={{
+                background: showRight ? C.tealSoft : showWrong ? "#FFE0E0" : C.white,
+                border: `3px solid ${showRight ? C.teal : showWrong ? "#E08080" : C.primarySoft}`,
+                borderRadius: 18, padding: "14px 8px",
+                cursor: locked ? "default" : "pointer",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                fontFamily: uiFont,
+                transition: "background 0.2s, border 0.2s",
+              }}
+            >
+              <div style={{ fontSize: 36, lineHeight: 1 }}>{c.emoji}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{c.word}</div>
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        Round {round + 1} of {ROUNDS}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mini-Game: Fill the Blank ────────────────────────────────────────────────
+// Word with the target phoneme replaced by an underline. Pick the right
+// letter(s) from 3 chips. 4 rounds.
+function FillBlankGame({ lesson, onFinish, onCorrect, onWrong }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const ROUNDS = 4;
+
+  const rounds = useMemo(() => {
+    const pool = wordsForLesson(lesson);
+    // Prefer words that actually contain the phoneme so the masking is meaningful.
+    const ph = lesson.phoneme.toLowerCase();
+    const eligible = pool.filter(p => p.word.toLowerCase().includes(ph));
+    const source = eligible.length ? eligible : pool;
+    return Array.from({ length: ROUNDS }, () => {
+      const target = source[Math.floor(Math.random() * source.length)];
+      const { masked, missing } = maskWord(target.word, lesson.phoneme);
+      const distractors = pickDistractorLetters(missing, 2);
+      const choices = [missing.toLowerCase(), ...distractors].sort(() => Math.random() - 0.5);
+      return { target, masked, missing: missing.toLowerCase(), choices };
+    });
+  }, [lesson]);
+
+  const [round, setRound] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
+  const current = rounds[round];
+
+  // Auto-play the full target word on round start so the kid hears what they're solving for
+  useEffect(() => {
+    if (!current) return;
+    setPicked(null); setLocked(false);
+    cancelTTS();
+    const t = setTimeout(() => void playTTS(current.target.word, { rate: 0.85 }), 280);
+    return () => { clearTimeout(t); cancelTTS(); };
+  }, [round, current]);
+
+  const replay = () => { if (current) void playTTS(current.target.word, { rate: 0.8 }); };
+
+  const onChoose = (letter: string) => {
+    if (locked) return;
+    setLocked(true);
+    setPicked(letter);
+    const isRight = letter === current.missing;
+    if (isRight) onCorrect?.(); else onWrong?.();
+    setTimeout(() => {
+      if (round + 1 >= ROUNDS) onFinish();
+      else setRound(r => r + 1);
+    }, 950);
+  };
+
+  if (!current) return null;
+
+  // Reveal the full word at the end of the round if they got it right
+  const showFullWord = picked !== null && picked === current.missing;
+  const displayed = showFullWord ? current.target.word : current.masked;
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Progress dots */}
+      <div className="flex gap-2 mb-2">
+        {rounds.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === round ? 24 : 8, height: 8, borderRadius: 4,
+              background: i <= round ? C.blush : C.primarySoft,
+              transition: "all 0.3s",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Emoji hint */}
+      <div style={{ fontSize: 70, lineHeight: 1 }}>{current.target.emoji}</div>
+
+      {/* Masked word + speaker */}
+      <div className="flex flex-col items-center gap-3">
+        <motion.div
+          key={`${round}-${displayed}`}
+          initial={{ scale: 0.9 }}
+          animate={{ scale: 1 }}
+          style={{
+            fontSize: 52, fontWeight: 900, color: C.ink, letterSpacing: 6,
+            fontFamily: dyslexicFont,
+          }}
+        >
+          {[...displayed].map((ch, i) => (
+            <span
+              key={i}
+              style={{
+                color: ch === "_" ? C.blush : C.ink,
+                borderBottom: ch === "_" ? `4px solid ${C.blush}` : "none",
+                paddingBottom: ch === "_" ? 0 : 0,
+                display: "inline-block",
+                minWidth: ch === "_" ? 32 : undefined,
+                textAlign: "center",
+              }}
+            >
+              {ch === "_" ? " " : ch}
+            </span>
+          ))}
+        </motion.div>
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={replay}
+          style={{
+            padding: "8px 16px", borderRadius: 20, border: "none",
+            background: C.blushSoft, color: C.blush,
+            display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
+            fontSize: 13, fontWeight: 800,
+          }}
+        >
+          <Volume2 size={14} /> Hear the word
+        </motion.button>
+      </div>
+
+      {/* Choice chips */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, width: "100%" }}>
+        {current.choices.map((letter) => {
+          const isPicked = picked === letter;
+          const isCorrect = letter === current.missing;
+          const showRight = picked !== null && isCorrect;
+          const showWrong = isPicked && !isCorrect;
+          return (
+            <motion.button
+              key={letter}
+              whileTap={{ scale: locked ? 1 : 0.93 }}
+              animate={showWrong ? { x: [0, -6, 6, -6, 6, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              onClick={() => onChoose(letter)}
+              disabled={locked}
+              style={{
+                background: showRight ? C.tealSoft : showWrong ? "#FFE0E0" : C.white,
+                border: `3px solid ${showRight ? C.teal : showWrong ? "#E08080" : C.primarySoft}`,
+                borderRadius: 18, padding: "18px 8px",
+                cursor: locked ? "default" : "pointer",
+                fontSize: 28, fontWeight: 900, color: C.ink,
+                fontFamily: dyslexicFont,
+                textTransform: "lowercase",
+              }}
+            >
+              {letter}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        Round {round + 1} of {ROUNDS}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mini-Game: Photo Touch ───────────────────────────────────────────────────
+// Visual-first matching. Big 2×2 emoji grid; voice says the target word; kid
+// taps the matching image. 4 rounds. Tracks first-tap accuracy.
+function PhotoTouchGame({ lesson, onFinish, onCorrect, onWrong }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const ROUNDS = 4;
+
+  const rounds = useMemo(() => {
+    const pool = wordsForLesson(lesson);
+    return Array.from({ length: ROUNDS }, () => {
+      const target = pool[Math.floor(Math.random() * pool.length)];
+      const distractors = pickDistractorWords(lesson.id, target.word, 3);
+      const choices = [target, ...distractors].sort(() => Math.random() - 0.5);
+      return { target, choices };
+    });
+  }, [lesson]);
+
+  const [round, setRound] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
+  const current = rounds[round];
+
+  useEffect(() => {
+    if (!current) return;
+    setPicked(null); setLocked(false);
+    cancelTTS();
+    const t = setTimeout(() => void playTTS(current.target.word, { rate: 0.9 }), 280);
+    return () => { clearTimeout(t); cancelTTS(); };
+  }, [round, current]);
+
+  const replay = () => { if (current) void playTTS(current.target.word, { rate: 0.85 }); };
+
+  const onChoose = (word: string) => {
+    if (locked) return;
+    setLocked(true);
+    setPicked(word);
+    const isRight = word === current.target.word;
+    if (isRight) onCorrect?.(); else onWrong?.();
+    setTimeout(() => {
+      if (round + 1 >= ROUNDS) onFinish();
+      else setRound(r => r + 1);
+    }, 950);
+  };
+
+  if (!current) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Progress dots */}
+      <div className="flex gap-2 mb-2">
+        {rounds.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === round ? 24 : 8, height: 8, borderRadius: 4,
+              background: i <= round ? C.teal : C.primarySoft,
+              transition: "all 0.3s",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Replay speaker */}
+      <motion.button
+        whileTap={{ scale: 0.92 }}
+        onClick={replay}
+        style={{
+          width: 110, height: 110, borderRadius: 55, border: "none",
+          background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+          color: "white", cursor: "pointer",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+          boxShadow: `0 14px 32px rgba(93,202,165,0.45)`,
+        }}
+      >
+        <Volume2 size={38} />
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1 }}>Hear it</div>
+      </motion.button>
+
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.muted, textAlign: "center" }}>
+        Tap the picture you hear
+      </div>
+
+      {/* 2×2 photo grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, width: "100%" }}>
+        {current.choices.map((c) => {
+          const isPicked = picked === c.word;
+          const isCorrect = c.word === current.target.word;
+          const showRight = picked !== null && isCorrect;
+          const showWrong = isPicked && !isCorrect;
+          return (
+            <motion.button
+              key={c.word}
+              whileTap={{ scale: locked ? 1 : 0.94 }}
+              animate={showWrong ? { x: [0, -6, 6, -6, 6, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              onClick={() => onChoose(c.word)}
+              disabled={locked}
+              style={{
+                aspectRatio: "1 / 1",
+                background: showRight ? C.tealSoft : showWrong ? "#FFE0E0" : C.white,
+                border: `4px solid ${showRight ? C.teal : showWrong ? "#E08080" : C.primarySoft}`,
+                borderRadius: 22,
+                cursor: locked ? "default" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 64, lineHeight: 1,
+                transition: "background 0.2s, border 0.2s",
+                fontFamily: uiFont,
+              }}
+            >
+              {c.emoji}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        Round {round + 1} of {ROUNDS}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mini-Game: Sound Match ───────────────────────────────────────────────────
+// Hear an isolated phoneme (IPA-tagged for crisp playback), tap each word
+// that starts with that sound. 3 rounds × 4 words each.
+function SoundMatchGame({ lesson, onFinish, onCorrect, onWrong }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const ROUNDS = 3;
+
+  const rounds = useMemo(() => {
+    const phoneme = lesson.phoneme.toLowerCase();
+    return Array.from({ length: ROUNDS }, () => {
+      // Pull 2 words from the current lesson's pool that contain the phoneme
+      // at the start (good matches), and 2 distractor words that don't.
+      const samePool = (WORD_POOLS[lesson.id] ?? wordsForLesson(lesson));
+      const matches = samePool
+        .filter(w => w.word.toLowerCase().startsWith(phoneme))
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 2);
+      // If we don't have 2 matches at start-position, fall back to any with the sound anywhere
+      while (matches.length < 2) {
+        const fb = samePool.find(w => w.word.toLowerCase().includes(phoneme) && !matches.includes(w));
+        if (!fb) break;
+        matches.push(fb);
+      }
+      const distractors = Object.values(WORD_POOLS)
+        .flat()
+        .filter(w => !w.word.toLowerCase().includes(phoneme))
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 2);
+      const choices = [...matches, ...distractors].sort(() => Math.random() - 0.5);
+      const matchSet = new Set(matches.map(m => m.word));
+      return { choices, matchSet };
+    });
+  }, [lesson]);
+
+  const [round, setRound] = useState(0);
+  const [taps, setTaps] = useState<Map<string, "right" | "wrong">>(new Map());
+  const [advancing, setAdvancing] = useState(false);
+  const current = rounds[round];
+
+  // Auto-play the IPA phoneme on round start
+  useEffect(() => {
+    if (!current) return;
+    setTaps(new Map());
+    setAdvancing(false);
+    cancelTTS();
+    const t = setTimeout(() => void speakPhonemeSound(lesson.phoneme), 320);
+    return () => { clearTimeout(t); cancelTTS(); };
+  }, [round, current, lesson.phoneme]);
+
+  const replay = () => void speakPhonemeSound(lesson.phoneme);
+
+  const onTap = (word: string) => {
+    if (advancing) return;
+    if (taps.has(word)) return;
+    const isMatch = current.matchSet.has(word);
+    const next = new Map(taps);
+    next.set(word, isMatch ? "right" : "wrong");
+    setTaps(next);
+    if (isMatch) onCorrect?.();
+    else onWrong?.();
+    // Also speak the word the kid tapped, briefly, so they hear the
+    // attempted match (helps learning regardless of right/wrong).
+    void playTTS(word, { rate: 0.9 });
+
+    // Advance once they've found both correct matches
+    const foundAllRight = [...next.entries()].filter(([, r]) => r === "right").length >= current.matchSet.size;
+    if (foundAllRight) {
+      setAdvancing(true);
+      setTimeout(() => {
+        if (round + 1 >= ROUNDS) onFinish();
+        else setRound(r => r + 1);
+      }, 1100);
+    }
+  };
+
+  if (!current) return null;
+
+  const matchesFound = [...taps.entries()].filter(([, r]) => r === "right").length;
+  const totalMatches = current.matchSet.size;
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Progress dots */}
+      <div className="flex gap-2 mb-2">
+        {rounds.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === round ? 24 : 8, height: 8, borderRadius: 4,
+              background: i <= round ? C.amber : C.primarySoft,
+              transition: "all 0.3s",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Phoneme target — big speaker tile */}
+      <motion.button
+        whileTap={{ scale: 0.94 }}
+        onClick={replay}
+        style={{
+          minWidth: 150, padding: "16px 28px", borderRadius: 30, border: "none",
+          background: `linear-gradient(135deg, ${C.amber}, #E8772E)`,
+          color: "white", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
+          boxShadow: `0 14px 36px rgba(244,162,97,0.45)`,
+        }}
+      >
+        <Volume2 size={28} />
+        <div style={{ fontSize: 36, fontWeight: 900, letterSpacing: 2, fontFamily: dyslexicFont }}>
+          {lesson.phoneme}
+        </div>
+      </motion.button>
+
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.muted, textAlign: "center" }}>
+        Tap every word that starts with <strong style={{ color: C.amber }}>{lesson.phoneme}</strong>
+      </div>
+
+      {/* 2×2 word grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%" }}>
+        {current.choices.map((c) => {
+          const result = taps.get(c.word);
+          return (
+            <motion.button
+              key={c.word}
+              whileTap={{ scale: !result ? 0.93 : 1 }}
+              animate={result === "wrong" ? { x: [0, -6, 6, -6, 6, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              onClick={() => onTap(c.word)}
+              disabled={!!result}
+              style={{
+                position: "relative",
+                background: result === "right" ? C.tealSoft : result === "wrong" ? "#FFE0E0" : C.white,
+                border: `3px solid ${result === "right" ? C.teal : result === "wrong" ? "#E08080" : C.primarySoft}`,
+                borderRadius: 18, padding: "14px 10px",
+                cursor: result ? "default" : "pointer",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                fontFamily: uiFont,
+                transition: "background 0.2s, border 0.2s",
+              }}
+            >
+              <div style={{ fontSize: 36, lineHeight: 1 }}>{c.emoji}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>{c.word}</div>
+              {result === "right" && (
+                <div style={{ position: "absolute", top: 6, right: 6 }}>
+                  <Check size={16} color={C.teal} strokeWidth={3} />
+                </div>
+              )}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        Round {round + 1} of {ROUNDS} · Found {matchesFound}/{totalMatches}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mini-Game: Memory Cards ──────────────────────────────────────────────────
+// Classic concentration. 8 cards = 4 pairs. Each pair: an emoji card and a
+// word card for the same word. Reveal two; if matched they stay up and the
+// cloned voice says the word. After all 4 pairs found → finish. Each "try"
+// (pair of taps) is one attempt; matched pair = 1 correct.
+function MemoryCardsGame({ lesson, onFinish, onCorrect, onWrong }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const PAIR_COUNT = 4;
+
+  type Card = { id: number; word: string; emoji: string; face: "emoji" | "word" };
+  const cards = useMemo<Card[]>(() => {
+    const pool = wordsForLesson(lesson);
+    // Pick up to PAIR_COUNT distinct words; if pool is too small, allow repeats.
+    const chosen: { word: string; emoji: string }[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; chosen.length < PAIR_COUNT && i < pool.length * 3; i++) {
+      const w = pool[i % pool.length];
+      if (!seen.has(w.word)) { seen.add(w.word); chosen.push(w); }
+    }
+    while (chosen.length < PAIR_COUNT) chosen.push(pool[0]); // hard fallback
+    const built: Card[] = [];
+    chosen.forEach((w, i) => {
+      built.push({ id: i * 2,     word: w.word, emoji: w.emoji, face: "emoji" });
+      built.push({ id: i * 2 + 1, word: w.word, emoji: w.emoji, face: "word"  });
+    });
+    return built.sort(() => Math.random() - 0.5);
+  }, [lesson]);
+
+  const [revealed, setRevealed] = useState<Set<number>>(new Set()); // currently-flipped (max 2)
+  const [matched, setMatched] = useState<Set<number>>(new Set());   // permanently matched
+  const [locked, setLocked] = useState(false);
+
+  const tap = (card: Card) => {
+    if (locked) return;
+    if (revealed.has(card.id)) return;
+    if (matched.has(card.id)) return;
+    const next = new Set(revealed);
+    next.add(card.id);
+    setRevealed(next);
+    // Speak the word whenever a card is revealed (great for the word-card too)
+    void playTTS(card.word, { rate: 0.9 });
+    if (next.size === 2) {
+      setLocked(true);
+      const [aId, bId] = [...next];
+      const a = cards.find(c => c.id === aId)!;
+      const b = cards.find(c => c.id === bId)!;
+      if (a.word === b.word) {
+        // Match!
+        setTimeout(() => {
+          setMatched(m => { const n = new Set(m); n.add(aId); n.add(bId); return n; });
+          setRevealed(new Set());
+          setLocked(false);
+          onCorrect?.();
+          // If that was the last pair → finish
+          if (matched.size + 2 >= cards.length) {
+            setTimeout(onFinish, 600);
+          }
+        }, 700);
+      } else {
+        // No match — flip back
+        onWrong?.();
+        setTimeout(() => {
+          setRevealed(new Set());
+          setLocked(false);
+        }, 1100);
+      }
+    }
+  };
+
+  const pairsFound = matched.size / 2;
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Header */}
+      <div className="flex flex-col items-center gap-1">
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+          Memory Cards
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>
+          Match each word to its picture
+        </div>
+      </div>
+
+      {/* 4×2 card grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, width: "100%" }}>
+        {cards.map((c) => {
+          const isUp = revealed.has(c.id) || matched.has(c.id);
+          const isMatched = matched.has(c.id);
+          return (
+            <motion.button
+              key={c.id}
+              whileTap={{ scale: !isUp && !locked ? 0.93 : 1 }}
+              onClick={() => tap(c)}
+              style={{
+                aspectRatio: "1 / 1.15",
+                background: isUp
+                  ? isMatched ? C.tealSoft : C.white
+                  : `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+                border: isUp
+                  ? `3px solid ${isMatched ? C.teal : C.primary}`
+                  : "3px solid transparent",
+                borderRadius: 14, padding: 4,
+                cursor: !isUp && !locked ? "pointer" : "default",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: uiFont,
+                color: isUp ? C.ink : "white",
+                fontSize: c.face === "emoji" ? 28 : 13,
+                fontWeight: 800,
+                textAlign: "center",
+                lineHeight: 1.05,
+                transition: "background 0.25s, border 0.25s",
+                boxShadow: isUp ? "0 4px 12px rgba(0,0,0,0.08)" : `0 4px 10px rgba(108,71,255,0.25)`,
+                wordBreak: "break-word",
+              }}
+            >
+              {isUp ? (c.face === "emoji" ? c.emoji : c.word) : "?"}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        {pairsFound} of {PAIR_COUNT} pairs found
+      </div>
+    </div>
+  );
+}
+
 // ─── Games Grid Screen ────────────────────────────────────────────────────────
 // Kid-facing "pick a game" surface for a single lesson. Every tile teaches the
 // same target phoneme (the lesson's phoneme). Two tiles are wired to real
@@ -2616,7 +3508,7 @@ function WinScreen({ onDone, variant = "small", lesson, comboMax }: { onDone: ()
 //   "grid"    → tile grid + Finish Lesson CTA
 //   "playing" → renders a single game with a back chevron
 //   "win"     → existing WinScreen + LessonUnlockOverlay flow
-type GameKey = "trace" | "build" | "sound-match" | "listening-lab" | "spell-it" | "read-aloud";
+type GameKey = "trace" | "build" | "flashcards" | "listen-up" | "fill-blank" | "photo-touch" | "sound-match" | "memory" | "word-sort" | "unscramble";
 
 type GameTile = {
   key: GameKey;
@@ -2643,6 +3535,16 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
   const [comboKey, setComboKey] = useState(0);
   const recordHit = useStore(s => s.recordHit);
   const recordMiss = useStore(s => s.recordMiss);
+  // Per-game-session tracking: correct/total/elapsed are recorded into the
+  // store on game finish via recordGameStat (read-site: Profile screen card).
+  const recordGameStat = useStore(s => s.recordGameStat);
+  const sessionCorrectRef = useRef(0);
+  const sessionTotalRef = useRef(0);
+  const sessionStartRef = useRef(0);
+  // Toast shown on the grid after a game finishes — quick visual confirmation
+  // that tracking ran.
+  const [lastResult, setLastResult] = useState<{ key: GameKey; correct: number; total: number; ms: number } | null>(null);
+
   const onCorrect = useCallback(() => {
     setCombo(c => {
       const n = c + 1;
@@ -2650,21 +3552,30 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
       return n;
     });
     setComboKey(k => k + 1);
+    sessionCorrectRef.current += 1;
+    sessionTotalRef.current += 1;
     recordHit();
   }, [recordHit]);
   const onWrong = useCallback(() => {
     setCombo(0);
+    sessionTotalRef.current += 1;
     recordMiss();
   }, [recordMiss]);
 
-  // Tile catalog — order matters for the 2×3 grid layout
+  // Tile catalog — order matters for the 2-column grid layout.
+  // Active games show in color; "coming" tiles wiggle when tapped to signal
+  // they're on the roadmap (Phase 5).
   const tiles: GameTile[] = [
-    { key: "trace",         title: "Trace It",      subtitle: "Write the letter",  emoji: "✍️", gradient: [C.glow,  C.glowDark],         status: "active" },
-    { key: "build",         title: "Word Builder",  subtitle: "Build the word",    emoji: "🧱", gradient: [C.amber, "#E8772E"],          status: "active" },
-    { key: "sound-match",   title: "Sound Match",   subtitle: "Find the match",    emoji: "🎯", gradient: [C.teal,  C.echoDark],         status: "coming" },
-    { key: "listening-lab", title: "Listening Lab", subtitle: "Hear & pick",       emoji: "👂", gradient: [C.primary, C.primaryDark],    status: "coming" },
-    { key: "spell-it",      title: "Spell It",      subtitle: "Spell the word",    emoji: "🔤", gradient: [C.blush, "#E8729B"],          status: "coming" },
-    { key: "read-aloud",    title: "Read Aloud",    subtitle: "Read it out!",      emoji: "📖", gradient: [C.sky,   "#5092C7"],          status: "coming" },
+    { key: "trace",       title: "Trace It",       subtitle: "Write the letter",  emoji: "✍️", gradient: [C.glow,    C.glowDark],      status: "active" },
+    { key: "build",       title: "Word Builder",   subtitle: "Build the word",    emoji: "🧱", gradient: [C.amber,   "#E8772E"],       status: "active" },
+    { key: "flashcards",  title: "Flashcards",     subtitle: "See & say",         emoji: "🃏", gradient: ["#FFD166", "#F4A261"],       status: "active" },
+    { key: "listen-up",   title: "Listen Up",      subtitle: "Hear & pick",       emoji: "👂", gradient: [C.primary, C.primaryDark],   status: "active" },
+    { key: "fill-blank",  title: "Fill the Blank", subtitle: "Missing letter",    emoji: "🧩", gradient: [C.blush,   "#E8729B"],       status: "active" },
+    { key: "photo-touch", title: "Photo Touch",    subtitle: "Tap the picture",   emoji: "📸", gradient: [C.teal,    C.echoDark],      status: "active" },
+    { key: "sound-match", title: "Sound Match",    subtitle: "Find the sound",    emoji: "🔊", gradient: [C.amber,   "#D17A1E"],       status: "active" },
+    { key: "memory",      title: "Memory Cards",   subtitle: "Match the pairs",   emoji: "🧠", gradient: ["#C4B0FF", C.primary],       status: "active" },
+    { key: "word-sort",   title: "Word Sort",      subtitle: "Sort the sounds",   emoji: "🗂️", gradient: [C.sky,     "#5092C7"],       status: "coming" },
+    { key: "unscramble",  title: "Unscramble",     subtitle: "Fix the word",      emoji: "🔀", gradient: ["#A89BFF", "#7C6FE0"],       status: "coming" },
   ];
 
   const playableCount = tiles.filter(t => t.status === "active").length;
@@ -2677,12 +3588,21 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
       setTimeout(() => setComingSoonKey(prev => (prev === tile.key ? null : prev)), 1400);
       return;
     }
+    // Reset per-session counters and start the timer
+    sessionCorrectRef.current = 0;
+    sessionTotalRef.current = 0;
+    sessionStartRef.current = Date.now();
     setActiveGame(tile.key);
     setView("playing");
   };
 
   const finishGame = () => {
     if (activeGame) {
+      const elapsedMs = Math.max(0, Date.now() - sessionStartRef.current);
+      const correct = sessionCorrectRef.current;
+      const total = sessionTotalRef.current;
+      recordGameStat(activeGame, { correct, total, elapsedMs });
+      setLastResult({ key: activeGame, correct, total, ms: elapsedMs });
       setCompleted(prev => {
         const n = new Set(prev);
         n.add(activeGame);
@@ -2750,6 +3670,24 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
             <DndProvider backend={DndBackend} options={isTouch ? { enableMouseEvents: true } : undefined}>
               <BuildItStep onNext={finishGame} lesson={lesson} onCorrect={onCorrect} onWrong={onWrong} />
             </DndProvider>
+          )}
+          {activeGame === "flashcards" && (
+            <FlashcardsGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
+          )}
+          {activeGame === "listen-up" && (
+            <ListenUpGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
+          )}
+          {activeGame === "fill-blank" && (
+            <FillBlankGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
+          )}
+          {activeGame === "photo-touch" && (
+            <PhotoTouchGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
+          )}
+          {activeGame === "sound-match" && (
+            <SoundMatchGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
+          )}
+          {activeGame === "memory" && (
+            <MemoryCardsGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
           )}
         </div>
       </div>
@@ -2831,6 +3769,36 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
           {playedCount}/{playableCount}
         </div>
       </div>
+
+      {/* Last-result toast — shows briefly after each game finishes so you
+          can see the tracker fired. */}
+      {lastResult && (() => {
+        const tile = tiles.find(t => t.key === lastResult.key);
+        const pct = lastResult.total > 0 ? Math.round((lastResult.correct / lastResult.total) * 100) : null;
+        const seconds = Math.max(1, Math.round(lastResult.ms / 1000));
+        return (
+          <motion.div
+            key={lastResult.key + "-" + lastResult.ms}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="mx-5 mb-3"
+            style={{
+              padding: "10px 14px", borderRadius: 14,
+              background: C.tealSoft, color: C.teal,
+              display: "flex", alignItems: "center", gap: 10,
+              fontSize: 12, fontWeight: 700,
+            }}
+          >
+            <Check size={16} />
+            <span>
+              {tile?.title ?? "Game"} done
+              {pct !== null ? ` · ${pct}% (${lastResult.correct}/${lastResult.total})` : ""}
+              {" · "}{seconds}s
+            </span>
+          </motion.div>
+        );
+      })()}
 
       {/* Tile grid — 2 columns */}
       <div className="flex-1 overflow-y-auto px-5 pb-4">
@@ -3387,6 +4355,8 @@ function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onO
     developing:   "Developing · Ages 6–7",
     advanced:     "Advanced · Ages 8+",
   };
+  // ── Game stats read site: per-game accuracy / attempts / time ─────────────
+  const gameStats = useStore(s => s.gameStats);
   const setStore = useStore(s => s.set);
   const reset = useStore(s => s.reset);
   const setTextSize = (v: "small" | "medium" | "large") => setStore({ textSize: v });
@@ -3467,6 +4437,82 @@ function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onO
           ))}
         </div>
       </div>
+
+      {/* Game Stats — accuracy, attempts, time per game type */}
+      {(() => {
+        const gameMeta: { key: string; label: string; emoji: string; color: string }[] = [
+          { key: "trace",       label: "Trace It",       emoji: "✍️", color: C.glow },
+          { key: "build",       label: "Word Builder",   emoji: "🧱", color: C.amber },
+          { key: "flashcards",  label: "Flashcards",     emoji: "🃏", color: C.glow },
+          { key: "listen-up",   label: "Listen Up",      emoji: "👂", color: C.primary },
+          { key: "fill-blank",  label: "Fill the Blank", emoji: "🧩", color: C.blush },
+          { key: "photo-touch", label: "Photo Touch",    emoji: "📸", color: C.teal },
+          { key: "sound-match", label: "Sound Match",    emoji: "🔊", color: C.amber },
+          { key: "memory",      label: "Memory Cards",   emoji: "🧠", color: C.primary },
+        ];
+        const fmtTime = (ms: number) => {
+          if (ms <= 0) return "—";
+          const secs = Math.round(ms / 1000);
+          if (secs < 60) return `${secs}s`;
+          const m = Math.floor(secs / 60);
+          const s = secs % 60;
+          return `${m}m ${s}s`;
+        };
+        const fmtAcc = (correct: number, total: number) =>
+          total > 0 ? `${Math.round((correct / total) * 100)}%` : "—";
+        const anyPlayed = gameMeta.some(g => (gameStats[g.key]?.attempts ?? 0) > 0);
+        return (
+          <div className="px-6 pb-5">
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, marginBottom: 10 }}>
+              Game Stats
+            </div>
+            <Card className="p-4 flex flex-col gap-3">
+              {!anyPlayed && (
+                <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "12px 0" }}>
+                  Play some games to see stats here.
+                </div>
+              )}
+              {anyPlayed && gameMeta.map(g => {
+                const s = gameStats[g.key];
+                const played = (s?.attempts ?? 0) > 0;
+                return (
+                  <div
+                    key={g.key}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "32px 1fr auto",
+                      alignItems: "center",
+                      gap: 10,
+                      opacity: played ? 1 : 0.45,
+                    }}
+                  >
+                    <div style={{ fontSize: 22, lineHeight: 1, textAlign: "center" }}>{g.emoji}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{g.label}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                        {played
+                          ? `${s!.attempts} play${s!.attempts === 1 ? "" : "s"} · ${fmtTime(s!.totalTimeMs)}`
+                          : "Not played yet"}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        padding: "4px 10px", borderRadius: 10,
+                        background: g.color + "22", color: g.color,
+                        fontSize: 11, fontWeight: 800,
+                        minWidth: 48, textAlign: "center",
+                      }}
+                    >
+                      {played ? fmtAcc(s!.correct, s!.total) : "—"}
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        );
+      })()}
+
       {/* Customize Your View */}
       <div className="px-6 pb-5">
         <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, marginBottom: 10 }}>Customize Your View</div>

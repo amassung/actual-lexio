@@ -72,7 +72,10 @@ type State = {
   missesInARow: number;
   difficultyLevel: 1 | 2 | 3; // word complexity WITHIN the current tier
   difficultyTier: DifficultyTier; // coarse cohort — see DifficultyTier comment
-  set: (patch: Partial<Omit<State, "set" | "addXp" | "completeLesson" | "reset" | "recordHit" | "recordMiss" | "nudgeTier">>) => void;
+  // Per-game-type rollup: accuracy, attempts, time. Keyed by game key
+  // (e.g. "trace", "build", "flashcards", "listen-up", "fill-blank").
+  gameStats: Record<string, GameStat>;
+  set: (patch: Partial<Omit<State, "set" | "addXp" | "completeLesson" | "reset" | "recordHit" | "recordMiss" | "nudgeTier" | "recordGameStat">>) => void;
   addXp: (n: number) => void;
   completeLesson: (phoneme: string, xp: number) => LessonResult;
   recordHit: () => void;
@@ -80,8 +83,25 @@ type State = {
   // Manual tier nudge — call from adaptive engine, parent dashboard override,
   // or tests. Always safe; clamps at the ends.
   nudgeTier: (direction: "up" | "down") => void;
+  // Append one game-session result to the rollup for that game key.
+  recordGameStat: (
+    gameKey: string,
+    payload: { correct: number; total: number; elapsedMs: number },
+  ) => void;
   reset: () => void;
 };
+
+export type GameStat = {
+  attempts: number;       // number of completed sessions
+  correct: number;        // accumulated correct answers across sessions
+  total: number;          // accumulated answered questions across sessions
+  totalTimeMs: number;    // accumulated time spent
+  lastPlayedAt: number;   // epoch ms of most recent session
+};
+
+const emptyGameStat = (): GameStat => ({
+  attempts: 0, correct: 0, total: 0, totalTimeMs: 0, lastPlayedAt: 0,
+});
 
 export const useStore = create<State>()(
   persist(
@@ -104,6 +124,7 @@ export const useStore = create<State>()(
       missesInARow: 0,
       difficultyLevel: 2,
       difficultyTier: "developing",
+      gameStats: {},
       set: (patch) => set(patch),
       addXp: (n) => set((s) => ({ xp: s.xp + n })),
       completeLesson: (phoneme, xp) => {
@@ -214,6 +235,18 @@ export const useStore = create<State>()(
           hitsInARow: 0,
           missesInARow: 0,
         })),
+      recordGameStat: (gameKey, payload) =>
+        set((s) => {
+          const prev = s.gameStats[gameKey] ?? emptyGameStat();
+          const next: GameStat = {
+            attempts: prev.attempts + 1,
+            correct: prev.correct + Math.max(0, payload.correct),
+            total: prev.total + Math.max(0, payload.total),
+            totalTimeMs: prev.totalTimeMs + Math.max(0, payload.elapsedMs),
+            lastPlayedAt: Date.now(),
+          };
+          return { gameStats: { ...s.gameStats, [gameKey]: next } };
+        }),
       reset: () =>
         set({
           name: "",
@@ -234,6 +267,7 @@ export const useStore = create<State>()(
           missesInARow: 0,
           difficultyLevel: 2,
           difficultyTier: "developing",
+          gameStats: {},
         }),
     }),
     {
