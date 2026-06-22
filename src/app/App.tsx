@@ -145,45 +145,50 @@ type LessonData = {
 // word per lesson, which is enough for Trace/Build but not for variety in
 // repeat-play games. Pools are keyed by lesson id; if a lesson has no pool the
 // fallback is just the lesson's single word + emoji.
+// Audit principle: every emoji should be a literal, recognizable visual of
+// the word. Abstract / approximation emojis ("mat" → 🟫 brown square, "red"
+// → 🟥 red square, "ink" → 🖋️ pen) are dropped because kids can't infer the
+// word from them in image-only games. Each pool has 5 entries so games have
+// enough variety to draw unique targets across rounds with no repeats.
 const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
-  "m-sound":   [{ word: "mat", emoji: "🟫" }, { word: "moon", emoji: "🌙" }, { word: "mom", emoji: "👩" }, { word: "map", emoji: "🗺️" }],
-  "s-sound":   [{ word: "sun", emoji: "☀️" }, { word: "snake", emoji: "🐍" }, { word: "seal", emoji: "🦭" }, { word: "sit", emoji: "🪑" }],
-  "t-sound":   [{ word: "top", emoji: "🎩" }, { word: "ten", emoji: "🔟" }, { word: "tiger", emoji: "🐯" }, { word: "tap", emoji: "🚰" }],
-  "short-a":   [{ word: "apple", emoji: "🍎" }, { word: "ant", emoji: "🐜" }, { word: "hat", emoji: "👒" }, { word: "cat", emoji: "🐱" }],
-  "p-sound":   [{ word: "pig", emoji: "🐷" }, { word: "pen", emoji: "🖊️" }, { word: "pan", emoji: "🍳" }, { word: "pot", emoji: "🍯" }],
-  "n-sound":   [{ word: "nose", emoji: "👃" }, { word: "nest", emoji: "🪺" }, { word: "net", emoji: "🥅" }, { word: "nine", emoji: "9️⃣" }],
-  "short-i":   [{ word: "ink", emoji: "🖋️" }, { word: "pig", emoji: "🐷" }, { word: "fish", emoji: "🐟" }, { word: "pin", emoji: "📌" }],
-  "short-e":   [{ word: "egg", emoji: "🥚" }, { word: "bed", emoji: "🛏️" }, { word: "pen", emoji: "🖊️" }, { word: "red", emoji: "🟥" }],
-  "short-o":   [{ word: "octopus", emoji: "🐙" }, { word: "hot", emoji: "🔥" }, { word: "log", emoji: "🪵" }, { word: "fox", emoji: "🦊" }],
-  "short-u":   [{ word: "umbrella", emoji: "☂️" }, { word: "bug", emoji: "🐛" }, { word: "cup", emoji: "☕" }, { word: "sun", emoji: "☀️" }],
-  "sh-sound":  [{ word: "ship", emoji: "🚢" }, { word: "shell", emoji: "🐚" }, { word: "fish", emoji: "🐟" }, { word: "sheep", emoji: "🐑" }],
-  "ch-sound":  [{ word: "chip", emoji: "🍟" }, { word: "chair", emoji: "🪑" }, { word: "cheese", emoji: "🧀" }, { word: "cherry", emoji: "🍒" }],
-  "th-sound":  [{ word: "thumb", emoji: "👍" }, { word: "three", emoji: "3️⃣" }, { word: "bath", emoji: "🛁" }, { word: "teeth", emoji: "🦷" }],
+  "m-sound":   [{ word: "moon", emoji: "🌙" }, { word: "monkey", emoji: "🐒" }, { word: "milk", emoji: "🥛" }, { word: "map", emoji: "🗺️" }, { word: "mouse", emoji: "🐭" }],
+  "s-sound":   [{ word: "sun", emoji: "☀️" }, { word: "snake", emoji: "🐍" }, { word: "seal", emoji: "🦭" }, { word: "sock", emoji: "🧦" }, { word: "star", emoji: "⭐" }],
+  "t-sound":   [{ word: "tiger", emoji: "🐯" }, { word: "turtle", emoji: "🐢" }, { word: "ten", emoji: "🔟" }, { word: "tree", emoji: "🌳" }, { word: "taco", emoji: "🌮" }],
+  "short-a":   [{ word: "apple", emoji: "🍎" }, { word: "ant", emoji: "🐜" }, { word: "cat", emoji: "🐱" }, { word: "bag", emoji: "👜" }, { word: "axe", emoji: "🪓" }],
+  "p-sound":   [{ word: "pig", emoji: "🐷" }, { word: "panda", emoji: "🐼" }, { word: "pizza", emoji: "🍕" }, { word: "pumpkin", emoji: "🎃" }, { word: "popcorn", emoji: "🍿" }],
+  "n-sound":   [{ word: "nose", emoji: "👃" }, { word: "nest", emoji: "🪺" }, { word: "nine", emoji: "9️⃣" }, { word: "nut", emoji: "🥜" }, { word: "needle", emoji: "🪡" }],
+  "short-i":   [{ word: "fish", emoji: "🐟" }, { word: "pin", emoji: "📌" }, { word: "ring", emoji: "💍" }, { word: "lips", emoji: "👄" }, { word: "pig", emoji: "🐷" }],
+  "short-e":   [{ word: "egg", emoji: "🥚" }, { word: "bed", emoji: "🛏️" }, { word: "hen", emoji: "🐔" }, { word: "leg", emoji: "🦵" }, { word: "ten", emoji: "🔟" }],
+  "short-o":   [{ word: "octopus", emoji: "🐙" }, { word: "fox", emoji: "🦊" }, { word: "log", emoji: "🪵" }, { word: "frog", emoji: "🐸" }, { word: "dog", emoji: "🐶" }],
+  "short-u":   [{ word: "umbrella", emoji: "☂️" }, { word: "bug", emoji: "🐛" }, { word: "cup", emoji: "☕" }, { word: "duck", emoji: "🦆" }, { word: "drum", emoji: "🥁" }],
+  "sh-sound":  [{ word: "ship", emoji: "🚢" }, { word: "shell", emoji: "🐚" }, { word: "fish", emoji: "🐟" }, { word: "sheep", emoji: "🐑" }, { word: "shoe", emoji: "👟" }],
+  "ch-sound":  [{ word: "cheese", emoji: "🧀" }, { word: "cherry", emoji: "🍒" }, { word: "chair", emoji: "🪑" }, { word: "cheetah", emoji: "🐆" }, { word: "chick", emoji: "🐥" }],
+  "th-sound":  [{ word: "thumb", emoji: "👍" }, { word: "three", emoji: "3️⃣" }, { word: "bath", emoji: "🛁" }, { word: "teeth", emoji: "🦷" }, { word: "thread", emoji: "🧵" }],
 };
-
-// ─── Crisp phoneme playback ───────────────────────────────────────────────────
-// ElevenLabs (and all general-purpose TTS) tends to add a phantom vowel to
-// isolated consonants ("suh" for "s", "muh" for "m") and clip sustained
-// sounds short. The fix is to send the IPA phoneme with a length mark (ːː)
-// inside ElevenLabs' phoneme tag — the cloned voice then sustains the actual
-// articulation. Used by Sound Match (isolated phoneme target).
-const IPA_FOR_PHONEME: Record<string, string> = {
-  m: "mːː", s: "sːː", n: "nːː", f: "fːː", l: "lːː", r: "ɹːː", z: "zːː", v: "vːː",
-  t: "t", p: "p", b: "b", d: "d", g: "g", h: "h", k: "k", w: "w", y: "j", j: "dʒ",
-  a: "æːː", e: "ɛːː", i: "ɪːː", o: "ɑːː", u: "ʌːː",
-  sh: "ʃːː", ch: "tʃ", th: "θːː", ng: "ŋ",
-};
-function speakPhonemeSound(letters: string, rate = 0.85): Promise<void> {
-  const lower = letters.toLowerCase();
-  const ipa = IPA_FOR_PHONEME[lower];
-  if (!ipa) return playTTS(letters, { rate });
-  return playTTS(`<phoneme alphabet="ipa" ph="${ipa}">${letters}</phoneme>`, { rate });
-}
 
 function wordsForLesson(lesson: LessonData): { word: string; emoji: string }[] {
   const pool = WORD_POOLS[lesson.id];
   if (pool && pool.length) return pool;
   return [{ word: lesson.word, emoji: lesson.wordEmoji }];
+}
+
+// Take `n` items from `arr` with no repeats. If `arr` is smaller than `n`,
+// reshuffles the remainder (so kids never see the same word twice in a row
+// across rounds; only after the entire pool is exhausted).
+function shuffleAndSlice<T>(arr: T[], n: number): T[] {
+  const out: T[] = [];
+  let deck = [...arr].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < n; i++) {
+    if (deck.length === 0) {
+      // Reshuffle when exhausted, avoiding back-to-back duplicates if possible.
+      deck = [...arr].sort(() => Math.random() - 0.5);
+      if (deck[0] === out[out.length - 1] && deck.length > 1) {
+        [deck[0], deck[1]] = [deck[1], deck[0]];
+      }
+    }
+    out.push(deck.shift()!);
+  }
+  return out;
 }
 
 // Pick `count` random word+emoji entries that are NOT `excluded.word`.
@@ -368,7 +373,7 @@ const LESSONS: Record<string, LessonData> = {
     xpReward: 50, isBoss: true,
   },
   "sh-sound": {
-    id: "sh-sound", phoneme: "SH", word: "ship", wordEmoji: "⛵",
+    id: "sh-sound", phoneme: "SH", word: "ship", wordEmoji: "🚢",
     tipText: 'SH together make one special sound — like saying "shhhh"!',
     phonemeParts: [
       { letters: "SH", label: "The blend", highlight: true },
@@ -2804,8 +2809,8 @@ function ListenUpGame({ lesson, onFinish, onCorrect, onWrong }: {
 
   const rounds = useMemo(() => {
     const pool = wordsForLesson(lesson);
-    return Array.from({ length: ROUNDS }, () => {
-      const target = pool[Math.floor(Math.random() * pool.length)];
+    const targets = shuffleAndSlice(pool, ROUNDS); // unique target per round
+    return targets.map((target) => {
       const distractors = pickDistractorWords(lesson.id, target.word, 2);
       const choices = [target, ...distractors].sort(() => Math.random() - 0.5);
       return { target, choices };
@@ -2935,8 +2940,8 @@ function FillBlankGame({ lesson, onFinish, onCorrect, onWrong }: {
     const ph = lesson.phoneme.toLowerCase();
     const eligible = pool.filter(p => p.word.toLowerCase().includes(ph));
     const source = eligible.length ? eligible : pool;
-    return Array.from({ length: ROUNDS }, () => {
-      const target = source[Math.floor(Math.random() * source.length)];
+    const targets = shuffleAndSlice(source, ROUNDS); // unique per round
+    return targets.map((target) => {
       const { masked, missing } = maskWord(target.word, lesson.phoneme);
       const distractors = pickDistractorLetters(missing, 2);
       const choices = [missing.toLowerCase(), ...distractors].sort(() => Math.random() - 0.5);
@@ -3089,8 +3094,8 @@ function PhotoTouchGame({ lesson, onFinish, onCorrect, onWrong }: {
 
   const rounds = useMemo(() => {
     const pool = wordsForLesson(lesson);
-    return Array.from({ length: ROUNDS }, () => {
-      const target = pool[Math.floor(Math.random() * pool.length)];
+    const targets = shuffleAndSlice(pool, ROUNDS); // unique per round
+    return targets.map((target) => {
       const distractors = pickDistractorWords(lesson.id, target.word, 3);
       const choices = [target, ...distractors].sort(() => Math.random() - 0.5);
       return { target, choices };
@@ -3215,25 +3220,23 @@ function SoundMatchGame({ lesson, onFinish, onCorrect, onWrong }: {
 
   const rounds = useMemo(() => {
     const phoneme = lesson.phoneme.toLowerCase();
-    return Array.from({ length: ROUNDS }, () => {
-      // Pull 2 words from the current lesson's pool that contain the phoneme
-      // at the start (good matches), and 2 distractor words that don't.
-      const samePool = (WORD_POOLS[lesson.id] ?? wordsForLesson(lesson));
-      const matches = samePool
-        .filter(w => w.word.toLowerCase().startsWith(phoneme))
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 2);
-      // If we don't have 2 matches at start-position, fall back to any with the sound anywhere
-      while (matches.length < 2) {
-        const fb = samePool.find(w => w.word.toLowerCase().includes(phoneme) && !matches.includes(w));
-        if (!fb) break;
-        matches.push(fb);
-      }
-      const distractors = Object.values(WORD_POOLS)
-        .flat()
-        .filter(w => !w.word.toLowerCase().includes(phoneme))
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 2);
+    const samePool = (WORD_POOLS[lesson.id] ?? wordsForLesson(lesson));
+    const matchCandidates = samePool.filter(w => w.word.toLowerCase().startsWith(phoneme));
+    // Fallback to "contains" if not enough start-position matches
+    const matchFallback = samePool.filter(w => w.word.toLowerCase().includes(phoneme));
+    const matchPool = matchCandidates.length >= 2 ? matchCandidates : matchFallback;
+    const distractorPool = Object.values(WORD_POOLS)
+      .flat()
+      .filter(w => !w.word.toLowerCase().includes(phoneme));
+
+    // Pre-shuffle decks so words don't repeat across rounds within a session.
+    // We pull 2 matches + 2 distractors per round → need ROUNDS*2 of each.
+    const matchDeck = shuffleAndSlice(matchPool, ROUNDS * 2);
+    const distractorDeck = shuffleAndSlice(distractorPool, ROUNDS * 2);
+
+    return Array.from({ length: ROUNDS }, (_, i) => {
+      const matches = matchDeck.slice(i * 2, i * 2 + 2);
+      const distractors = distractorDeck.slice(i * 2, i * 2 + 2);
       const choices = [...matches, ...distractors].sort(() => Math.random() - 0.5);
       const matchSet = new Set(matches.map(m => m.word));
       return { choices, matchSet };
@@ -3245,17 +3248,20 @@ function SoundMatchGame({ lesson, onFinish, onCorrect, onWrong }: {
   const [advancing, setAdvancing] = useState(false);
   const current = rounds[round];
 
-  // Auto-play the IPA phoneme on round start
+  // Auto-play the target phoneme on round start. Uses the existing
+  // PHONEME_MAP-backed speakPhoneme() helper which sends sustained letter
+  // spellings (e.g. "Sssssss") that ElevenLabs reliably renders as the
+  // actual sound — far more dependable than inline IPA phoneme tags.
   useEffect(() => {
     if (!current) return;
     setTaps(new Map());
     setAdvancing(false);
     cancelTTS();
-    const t = setTimeout(() => void speakPhonemeSound(lesson.phoneme), 320);
+    const t = setTimeout(() => speakPhoneme(lesson.phoneme), 320);
     return () => { clearTimeout(t); cancelTTS(); };
   }, [round, current, lesson.phoneme]);
 
-  const replay = () => void speakPhonemeSound(lesson.phoneme);
+  const replay = () => speakPhoneme(lesson.phoneme);
 
   const onTap = (word: string) => {
     if (advancing) return;
