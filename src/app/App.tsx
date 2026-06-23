@@ -205,6 +205,27 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   "cvce-i": [{ word: "bike", emoji: "🚲" }, { word: "kite", emoji: "🪁" }, { word: "smile", emoji: "😊" }, { word: "time", emoji: "⏰" }, { word: "five", emoji: "5️⃣" }],
   "cvce-o": [{ word: "rope", emoji: "🪢" }, { word: "nose", emoji: "👃" }, { word: "home", emoji: "🏠" }, { word: "bone", emoji: "🦴" }, { word: "stone", emoji: "🪨" }],
   "cvce-u": [{ word: "cube", emoji: "🧊" }, { word: "tube", emoji: "🧪" }, { word: "flute", emoji: "🎶" }, { word: "mule", emoji: "🫏" }, { word: "prune", emoji: "🍇" }],
+  // ── Sight Words (Dolch 1st Grade) ──────────────────────────────────────────
+  "sight-1st-1": [{ word: "her", emoji: "👩" }, { word: "him", emoji: "👨" }, { word: "his", emoji: "👦" }, { word: "them", emoji: "👬" }, { word: "then", emoji: "⏭️" }],
+  "sight-1st-2": [{ word: "had", emoji: "📚" }, { word: "has", emoji: "🎒" }, { word: "were", emoji: "⏪" }, { word: "going", emoji: "🚶" }, { word: "of", emoji: "🔗" }],
+  "sight-1st-3": [{ word: "ask", emoji: "🤔" }, { word: "know", emoji: "💡" }, { word: "think", emoji: "🧠" }, { word: "may", emoji: "🤷" }, { word: "could", emoji: "✨" }],
+  "sight-1st-4": [{ word: "take", emoji: "🤲" }, { word: "give", emoji: "🎁" }, { word: "walk", emoji: "🚶" }, { word: "stop", emoji: "🛑" }, { word: "put", emoji: "📦" }],
+  "sight-1st-5": [{ word: "after", emoji: "⏭️" }, { word: "again", emoji: "🔁" }, { word: "every", emoji: "♾️" }, { word: "once", emoji: "1️⃣" }, { word: "just", emoji: "✨" }],
+  "sight-1st-6": [{ word: "by", emoji: "📍" }, { word: "from", emoji: "📤" }, { word: "when", emoji: "⏰" }, { word: "how", emoji: "❓" }, { word: "over", emoji: "🔝" }],
+  // ── Vocabulary: Animals ────────────────────────────────────────────────────
+  "animal-pets": [{ word: "cat", emoji: "🐱" }, { word: "dog", emoji: "🐶" }, { word: "bird", emoji: "🐦" }, { word: "fish", emoji: "🐠" }, { word: "hamster", emoji: "🐹" }],
+  "animal-farm": [{ word: "cow", emoji: "🐄" }, { word: "pig", emoji: "🐷" }, { word: "horse", emoji: "🐴" }, { word: "sheep", emoji: "🐑" }, { word: "duck", emoji: "🦆" }],
+  "animal-wild": [{ word: "lion", emoji: "🦁" }, { word: "tiger", emoji: "🐯" }, { word: "bear", emoji: "🐻" }, { word: "elephant", emoji: "🐘" }, { word: "monkey", emoji: "🐒" }],
+  "animal-sea":  [{ word: "crab", emoji: "🦀" }, { word: "shark", emoji: "🦈" }, { word: "whale", emoji: "🐋" }, { word: "octopus", emoji: "🐙" }, { word: "dolphin", emoji: "🐬" }],
+  // ── Vocabulary: Food ───────────────────────────────────────────────────────
+  "food-fruit": [{ word: "apple", emoji: "🍎" }, { word: "banana", emoji: "🍌" }, { word: "orange", emoji: "🍊" }, { word: "grape", emoji: "🍇" }, { word: "strawberry", emoji: "🍓" }],
+  "food-meal":  [{ word: "pizza", emoji: "🍕" }, { word: "burger", emoji: "🍔" }, { word: "bread", emoji: "🍞" }, { word: "soup", emoji: "🍜" }, { word: "taco", emoji: "🌮" }],
+  "food-snack": [{ word: "cookie", emoji: "🍪" }, { word: "candy", emoji: "🍬" }, { word: "popcorn", emoji: "🍿" }, { word: "chips", emoji: "🍟" }, { word: "donut", emoji: "🍩" }],
+  "food-drink": [{ word: "milk", emoji: "🥛" }, { word: "water", emoji: "💧" }, { word: "juice", emoji: "🧃" }, { word: "tea", emoji: "🍵" }, { word: "soda", emoji: "🥤" }],
+  // ── Vocabulary: Body ───────────────────────────────────────────────────────
+  "body-face":  [{ word: "eye", emoji: "👁️" }, { word: "ear", emoji: "👂" }, { word: "nose", emoji: "👃" }, { word: "mouth", emoji: "👄" }, { word: "tooth", emoji: "🦷" }],
+  "body-hands": [{ word: "hand", emoji: "✋" }, { word: "thumb", emoji: "👍" }, { word: "finger", emoji: "👆" }, { word: "arm", emoji: "💪" }, { word: "fist", emoji: "✊" }],
+  "body-legs":  [{ word: "leg", emoji: "🦵" }, { word: "foot", emoji: "🦶" }, { word: "toe", emoji: "🦶" }, { word: "knee", emoji: "🦴" }, { word: "ankle", emoji: "🦴" }],
 };
 
 function wordsForLesson(lesson: LessonData): { word: string; emoji: string }[] {
@@ -1022,6 +1043,287 @@ const LESSONS: Record<string, LessonData> = {
     buildSlots: ["C", "A", "K", "E"], buildTiles: ["C", "A", "K", "E", "B", "T"],
     xpReward: 125, isBoss: true,
   },
+
+  // ── Level 6c: Sight Words (Dolch 1st Grade) ────────────────────────────────
+  // 30 more high-frequency words. After this tier the kid recognizes ~60% of
+  // all English text by sight.
+  "sight-1st-1": {
+    id: "sight-1st-1", phoneme: "Sight Words", word: "her", wordEmoji: "👩",
+    tipText: "Possessive pronouns: her, him, his, them. They show who things belong to.",
+    phonemeParts: [
+      { letters: "H", label: "Start", highlight: true },
+      { letters: "ER", label: "R-vowel", highlight: false },
+    ],
+    traceStrokes: ["M 80 50 L 80 210", "M 280 50 L 280 210", "M 80 130 L 280 130"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(her|him|his|them|then)\b/i,
+    buildSlots: ["H", "E", "R"], buildTiles: ["H", "E", "R", "I", "M", "S"],
+    xpReward: 22,
+  },
+  "sight-1st-2": {
+    id: "sight-1st-2", phoneme: "Sight Words", word: "had", wordEmoji: "📚",
+    tipText: "Helper verbs: had, has, were, going, of. They team up with other verbs.",
+    phonemeParts: [
+      { letters: "H", label: "Start", highlight: true },
+      { letters: "AD", label: "Short A", highlight: false },
+    ],
+    traceStrokes: ["M 80 50 L 80 210", "M 280 50 L 280 210", "M 80 130 L 280 130"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(had|has|were|going|of)\b/i,
+    buildSlots: ["H", "A", "D"], buildTiles: ["H", "A", "D", "S", "E", "R"],
+    xpReward: 22,
+  },
+  "sight-1st-3": {
+    id: "sight-1st-3", phoneme: "Sight Words", word: "ask", wordEmoji: "🤔",
+    tipText: "Thinking words: ask, know, think, may, could. Use them to wonder!",
+    phonemeParts: [
+      { letters: "A", label: "Short A", highlight: true },
+      { letters: "SK", label: "Blend end", highlight: false },
+    ],
+    traceStrokes: ["M 60 200 L 180 60", "M 180 60 L 300 200", "M 100 145 L 260 145"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(ask|know|think|may|could)\b/i,
+    buildSlots: ["A", "S", "K"], buildTiles: ["A", "S", "K", "M", "T", "C"],
+    xpReward: 22,
+  },
+  "sight-1st-4": {
+    id: "sight-1st-4", phoneme: "Sight Words", word: "take", wordEmoji: "🤲",
+    tipText: "Action helpers: take, give, walk, stop, put. Bigger verbs!",
+    phonemeParts: [
+      { letters: "T", label: "Start", highlight: true },
+      { letters: "AKE", label: "Long A", highlight: false },
+    ],
+    traceStrokes: ["M 60 75 L 300 75", "M 180 75 L 180 210"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(take|give|walk|stop|put)\b/i,
+    buildSlots: ["T", "A", "K", "E"], buildTiles: ["T", "A", "K", "E", "G", "W"],
+    xpReward: 22,
+  },
+  "sight-1st-5": {
+    id: "sight-1st-5", phoneme: "Sight Words", word: "after", wordEmoji: "⏭️",
+    tipText: "Time words: after, again, every, once, just. They tell you WHEN!",
+    phonemeParts: [
+      { letters: "A", label: "Short A", highlight: true },
+      { letters: "FTER", label: "The rest", highlight: false },
+    ],
+    traceStrokes: ["M 60 200 L 180 60", "M 180 60 L 300 200", "M 100 145 L 260 145"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(after|again|every|once|just)\b/i,
+    buildSlots: ["A", "F", "T", "E", "R"], buildTiles: ["A", "F", "T", "E", "R", "G"],
+    xpReward: 22,
+  },
+  "sight-1st-6": {
+    id: "sight-1st-6", phoneme: "Sight Words", word: "by", wordEmoji: "📍",
+    tipText: "Connectors: by, from, when, how, over. They tell you WHERE and HOW.",
+    phonemeParts: [
+      { letters: "B", label: "Start", highlight: true },
+      { letters: "Y", label: "Long Y", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210",
+      "M 80 50 Q 240 50 240 110 Q 240 130 80 130",
+      "M 80 130 Q 250 130 250 175 Q 250 210 80 210",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(by|from|when|how|over)\b/i,
+    buildSlots: ["B", "Y"], buildTiles: ["B", "Y", "F", "W", "H", "O"],
+    xpReward: 22,
+  },
+  "sight-1st-boss": {
+    id: "sight-1st-boss", phoneme: "1st Grade!", word: "reader", wordEmoji: "📖",
+    tipText: "You finished 1st grade sight words! That's 90+ of the most-used English words.",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["H", "E", "R"], buildTiles: ["H", "E", "R", "T", "A", "K"],
+    xpReward: 175, isBoss: true,
+  },
+
+  // ── Level 8: Vocabulary — Animals ──────────────────────────────────────────
+  "animal-pets": {
+    id: "animal-pets", phoneme: "Pets", word: "cat", wordEmoji: "🐱",
+    tipText: "Pets! The animals we keep at home — cat, dog, fish, bird.",
+    phonemeParts: [
+      { letters: "C", label: "Start", highlight: false },
+      { letters: "A", label: "Short A", highlight: true },
+      { letters: "T", label: "End", highlight: false },
+    ],
+    traceStrokes: ["M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(cat|dog|bird|fish|hamster)\b/i,
+    buildSlots: ["C", "A", "T"], buildTiles: ["C", "A", "T", "D", "O", "G"],
+    xpReward: 20,
+  },
+  "animal-farm": {
+    id: "animal-farm", phoneme: "Farm", word: "cow", wordEmoji: "🐄",
+    tipText: "Farm animals! Cow, pig, horse, sheep, duck — they live on a farm.",
+    phonemeParts: [
+      { letters: "C", label: "Start", highlight: false },
+      { letters: "OW", label: "Diphthong", highlight: true },
+    ],
+    traceStrokes: ["M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(cow|pig|horse|sheep|duck)\b/i,
+    buildSlots: ["C", "O", "W"], buildTiles: ["C", "O", "W", "P", "I", "G"],
+    xpReward: 20,
+  },
+  "animal-wild": {
+    id: "animal-wild", phoneme: "Wild", word: "lion", wordEmoji: "🦁",
+    tipText: "Wild animals! Lion, tiger, bear, elephant, monkey — kings of the jungle!",
+    phonemeParts: [
+      { letters: "L", label: "Start", highlight: false },
+      { letters: "I", label: "Long I", highlight: true },
+      { letters: "ON", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 100 50 L 100 210", "M 100 210 L 260 210"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(lion|tiger|bear|elephant|monkey)\b/i,
+    buildSlots: ["L", "I", "O", "N"], buildTiles: ["L", "I", "O", "N", "T", "B"],
+    xpReward: 20,
+  },
+  "animal-sea": {
+    id: "animal-sea", phoneme: "Sea", word: "crab", wordEmoji: "🦀",
+    tipText: "Sea creatures! Crab, shark, whale, octopus, dolphin — they live in water.",
+    phonemeParts: [
+      { letters: "C", label: "Start", highlight: false },
+      { letters: "R", label: "Blend", highlight: true },
+      { letters: "AB", label: "Short A", highlight: false },
+    ],
+    traceStrokes: ["M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(crab|shark|whale|octopus|dolphin)\b/i,
+    buildSlots: ["C", "R", "A", "B"], buildTiles: ["C", "R", "A", "B", "S", "H"],
+    xpReward: 20,
+  },
+  "animal-boss": {
+    id: "animal-boss", phoneme: "Animal Expert!", word: "animals", wordEmoji: "🦓",
+    tipText: "You know 20+ animals! Pets, farm, wild, and sea creatures.",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["C", "A", "T"], buildTiles: ["C", "A", "T", "D", "O", "G"],
+    xpReward: 100, isBoss: true,
+  },
+
+  // ── Level 9: Vocabulary — Food ─────────────────────────────────────────────
+  "food-fruit": {
+    id: "food-fruit", phoneme: "Fruit", word: "apple", wordEmoji: "🍎",
+    tipText: "Fruits! Apple, banana, orange, grape, strawberry — sweet and healthy.",
+    phonemeParts: [
+      { letters: "A", label: "Short A", highlight: true },
+      { letters: "PPLE", label: "The rest", highlight: false },
+    ],
+    traceStrokes: ["M 60 200 L 180 60", "M 180 60 L 300 200", "M 100 145 L 260 145"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(apple|banana|orange|grape|strawberry)\b/i,
+    buildSlots: ["A", "P", "P", "L", "E"], buildTiles: ["A", "P", "L", "E", "B", "N"],
+    xpReward: 20,
+  },
+  "food-meal": {
+    id: "food-meal", phoneme: "Meals", word: "pizza", wordEmoji: "🍕",
+    tipText: "Meals! Pizza, burger, bread, soup, taco — yummy main dishes.",
+    phonemeParts: [
+      { letters: "P", label: "Start", highlight: true },
+      { letters: "I", label: "Short I", highlight: false },
+      { letters: "ZZA", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210",
+      "M 80 50 Q 260 50 260 120 Q 260 190 80 190",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(pizza|burger|bread|soup|taco)\b/i,
+    buildSlots: ["P", "I", "Z", "Z", "A"], buildTiles: ["P", "I", "Z", "A", "T", "C"],
+    xpReward: 20,
+  },
+  "food-snack": {
+    id: "food-snack", phoneme: "Snacks", word: "cookie", wordEmoji: "🍪",
+    tipText: "Snacks! Cookie, candy, popcorn, chips, donut — fun little treats.",
+    phonemeParts: [
+      { letters: "C", label: "Start", highlight: true },
+      { letters: "OO", label: "Long OO", highlight: false },
+      { letters: "KIE", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(cookie|candy|popcorn|chips|donut)\b/i,
+    buildSlots: ["C", "O", "O", "K", "I", "E"], buildTiles: ["C", "O", "K", "I", "E", "D"],
+    xpReward: 20,
+  },
+  "food-drink": {
+    id: "food-drink", phoneme: "Drinks", word: "milk", wordEmoji: "🥛",
+    tipText: "Drinks! Milk, water, juice, tea, soda — what we drink.",
+    phonemeParts: [
+      { letters: "M", label: "Start", highlight: true },
+      { letters: "I", label: "Short I", highlight: false },
+      { letters: "LK", label: "End blend", highlight: false },
+    ],
+    traceStrokes: [
+      "M 60 200 L 60 50", "M 60 50 L 180 150",
+      "M 180 150 L 300 50", "M 300 50 L 300 200",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(milk|water|juice|tea|soda)\b/i,
+    buildSlots: ["M", "I", "L", "K"], buildTiles: ["M", "I", "L", "K", "W", "T"],
+    xpReward: 20,
+  },
+  "food-boss": {
+    id: "food-boss", phoneme: "Food Expert!", word: "foodie", wordEmoji: "🍽️",
+    tipText: "You know 20+ foods and drinks! Fruits, meals, snacks, and drinks.",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["F", "O", "O", "D"], buildTiles: ["F", "O", "D", "P", "I", "Z"],
+    xpReward: 100, isBoss: true,
+  },
+
+  // ── Level 10: Vocabulary — Body ────────────────────────────────────────────
+  "body-face": {
+    id: "body-face", phoneme: "Face", word: "eye", wordEmoji: "👁️",
+    tipText: "Face parts! Eye, ear, nose, mouth, tooth — your face has them all.",
+    phonemeParts: [
+      { letters: "E", label: "Long E", highlight: true },
+      { letters: "YE", label: "Silent end", highlight: false },
+    ],
+    traceStrokes: ["M 80 60 L 80 200", "M 80 60 L 260 60", "M 80 130 L 220 130", "M 80 200 L 260 200"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(eye|ear|nose|mouth|tooth)\b/i,
+    buildSlots: ["E", "Y", "E"], buildTiles: ["E", "Y", "A", "R", "N", "O"],
+    xpReward: 20,
+  },
+  "body-hands": {
+    id: "body-hands", phoneme: "Hands", word: "hand", wordEmoji: "✋",
+    tipText: "Hands! Hand, thumb, finger, arm, fist — what you use to touch.",
+    phonemeParts: [
+      { letters: "H", label: "Start", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "ND", label: "End blend", highlight: false },
+    ],
+    traceStrokes: ["M 80 50 L 80 210", "M 280 50 L 280 210", "M 80 130 L 280 130"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(hand|thumb|finger|arm|fist)\b/i,
+    buildSlots: ["H", "A", "N", "D"], buildTiles: ["H", "A", "N", "D", "T", "F"],
+    xpReward: 20,
+  },
+  "body-legs": {
+    id: "body-legs", phoneme: "Legs", word: "leg", wordEmoji: "🦵",
+    tipText: "Legs! Leg, foot, toe, knee, ankle — what you use to walk and run.",
+    phonemeParts: [
+      { letters: "L", label: "Start", highlight: true },
+      { letters: "E", label: "Short E", highlight: false },
+      { letters: "G", label: "End", highlight: false },
+    ],
+    traceStrokes: ["M 100 50 L 100 210", "M 100 210 L 260 210"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(leg|foot|toe|knee|ankle)\b/i,
+    buildSlots: ["L", "E", "G"], buildTiles: ["L", "E", "G", "F", "T", "K"],
+    xpReward: 20,
+  },
+  "body-boss": {
+    id: "body-boss", phoneme: "Body Expert!", word: "body", wordEmoji: "🧍",
+    tipText: "You know all the body parts — head, hands, and feet!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["B", "O", "D", "Y"], buildTiles: ["B", "O", "D", "Y", "H", "L"],
+    xpReward: 100, isBoss: true,
+  },
 };
 
 const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x: number }[] = [
@@ -1084,6 +1386,31 @@ const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x
   { id: "cvce-o",        label: "O + Magic E",  sub: "hope, rope, nose",   boss: false, x: 140 },
   { id: "cvce-u",        label: "U + Magic E",  sub: "cute, cube, tube",   boss: false, x: 60 },
   { id: "cvce-boss",     label: "Magic E Master",sub:"Silent E expert!",   boss: true,  x: 195 },
+  // Level 6c — Sight Words: Dolch 1st Grade
+  { id: "sight-1st-1",   label: "Her & Him",    sub: "her, him, his",      boss: false, x: 80 },
+  { id: "sight-1st-2",   label: "Had & Has",    sub: "had, has, were",     boss: false, x: 240 },
+  { id: "sight-1st-3",   label: "Know & Think", sub: "ask, know, may",     boss: false, x: 140 },
+  { id: "sight-1st-4",   label: "Take & Give",  sub: "take, give, walk",   boss: false, x: 60 },
+  { id: "sight-1st-5",   label: "After & Again",sub: "after, every, once", boss: false, x: 240 },
+  { id: "sight-1st-6",   label: "By & From",    sub: "by, from, when",     boss: false, x: 140 },
+  { id: "sight-1st-boss",label: "1st Grade!",   sub: "90+ words mastered", boss: true,  x: 195 },
+  // Level 8 — Vocabulary: Animals
+  { id: "animal-pets",   label: "Pets",         sub: "cat, dog, fish",     boss: false, x: 80 },
+  { id: "animal-farm",   label: "Farm",         sub: "cow, pig, horse",    boss: false, x: 240 },
+  { id: "animal-wild",   label: "Wild",         sub: "lion, tiger, bear",  boss: false, x: 140 },
+  { id: "animal-sea",    label: "Sea",          sub: "crab, shark, whale", boss: false, x: 60 },
+  { id: "animal-boss",   label: "Animal Expert",sub: "20+ animals!",       boss: true,  x: 195 },
+  // Level 9 — Vocabulary: Food
+  { id: "food-fruit",    label: "Fruit",        sub: "apple, grape",       boss: false, x: 80 },
+  { id: "food-meal",     label: "Meals",        sub: "pizza, burger",      boss: false, x: 240 },
+  { id: "food-snack",    label: "Snacks",       sub: "cookie, popcorn",    boss: false, x: 140 },
+  { id: "food-drink",    label: "Drinks",       sub: "milk, juice, tea",   boss: false, x: 60 },
+  { id: "food-boss",     label: "Food Expert",  sub: "20+ foods & drinks", boss: true,  x: 195 },
+  // Level 10 — Vocabulary: Body
+  { id: "body-face",     label: "Face",         sub: "eye, ear, nose",     boss: false, x: 80 },
+  { id: "body-hands",    label: "Hands",        sub: "hand, thumb, arm",   boss: false, x: 240 },
+  { id: "body-legs",     label: "Legs",         sub: "leg, foot, knee",    boss: false, x: 140 },
+  { id: "body-boss",     label: "Body Expert",  sub: "All body parts!",    boss: true,  x: 195 },
 ];
 
 // ─── Categories — independent learning tracks ────────────────────────────────
@@ -1147,7 +1474,7 @@ const CATEGORIES: LessonCategory[] = [
   {
     id: "sight-words",
     label: "Sight Words",
-    sub: "60+ most-used words",
+    sub: "90+ most-used words",
     emoji: "👀",
     gradient: ["#7C6FE0", "#5645B8"],
     lessonIds: [
@@ -1159,6 +1486,10 @@ const CATEGORIES: LessonCategory[] = [
       "sight-prim-1", "sight-prim-2", "sight-prim-3",
       "sight-prim-4", "sight-prim-5", "sight-prim-6",
       "sight-master",
+      // 1st Grade tier
+      "sight-1st-1", "sight-1st-2", "sight-1st-3",
+      "sight-1st-4", "sight-1st-5", "sight-1st-6",
+      "sight-1st-boss",
     ],
   },
   {
@@ -1168,6 +1499,31 @@ const CATEGORIES: LessonCategory[] = [
     emoji: "🪄",
     gradient: ["#9B7EFF", "#6C47FF"],
     lessonIds: ["cvce-a", "cvce-i", "cvce-o", "cvce-u", "cvce-boss"],
+  },
+  // ── Vocabulary tracks (themed nouns) ───────────────────────────────────────
+  {
+    id: "animals",
+    label: "Animals",
+    sub: "Pets, farm, wild & sea",
+    emoji: "🦁",
+    gradient: ["#F4A261", "#D17A1E"],
+    lessonIds: ["animal-pets", "animal-farm", "animal-wild", "animal-sea", "animal-boss"],
+  },
+  {
+    id: "food",
+    label: "Food",
+    sub: "Fruits, meals, snacks, drinks",
+    emoji: "🍎",
+    gradient: ["#F4B4C8", "#D85B85"],
+    lessonIds: ["food-fruit", "food-meal", "food-snack", "food-drink", "food-boss"],
+  },
+  {
+    id: "body",
+    label: "Body Parts",
+    sub: "Face, hands, legs",
+    emoji: "🧍",
+    gradient: ["#5DCAA5", "#3DB88A"],
+    lessonIds: ["body-face", "body-hands", "body-legs", "body-boss"],
   },
 ];
 
