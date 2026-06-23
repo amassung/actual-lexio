@@ -134,16 +134,29 @@ export function cancelTTS() {
 export async function playTTS(text: string, opts: TTSOpts = {}): Promise<void> {
   cancelTTS();
 
+  // Auto-tune for very short words (sight words: "I", "a", "to", "the").
+  // These tend to get clipped or mumbled at default speed. Slow them down
+  // slightly so each phoneme lands cleanly. Only applies if caller hasn't
+  // already specified a rate.
+  const trimmed = text.trim();
+  const isShortWord =
+    !trimmed.startsWith("<") &&
+    !opts.raw &&
+    opts.rate == null &&
+    trimmed.split(/\s+/).length === 1 &&
+    trimmed.replace(/[.!?]$/, "").length <= 4;
+  const effectiveOpts: TTSOpts = isShortWord ? { ...opts, rate: 0.85 } : opts;
+
   // No key → use browser fallback immediately. Keeps local dev working.
-  if (!KEY) return playSpeechSynthesis(text, opts);
+  if (!KEY) return playSpeechSynthesis(text, effectiveOpts);
 
   let blob: Blob;
   try {
-    blob = await getBlob(text, opts);
+    blob = await getBlob(text, effectiveOpts);
   } catch (e) {
     // Network/CORS/4xx — fall back without throwing to caller
     if (typeof console !== "undefined") console.warn("[Lexio TTS] ElevenLabs failed, falling back:", (e as Error).message);
-    return playSpeechSynthesis(text, opts);
+    return playSpeechSynthesis(text, effectiveOpts);
   }
 
   return new Promise<void>(resolve => {
@@ -164,7 +177,7 @@ export async function playTTS(text: string, opts: TTSOpts = {}): Promise<void> {
         playPromise.catch(() => {
           // Autoplay blocked or other play() rejection — fall back to browser TTS
           cleanup();
-          playSpeechSynthesis(text, opts).then(resolve);
+          playSpeechSynthesis(text, effectiveOpts).then(resolve);
         });
       }
     } catch {

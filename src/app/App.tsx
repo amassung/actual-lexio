@@ -98,6 +98,11 @@ const PHONEME_MAP: Record<string, { text: string; rate: number }> = {
   b: { text: "bi, bi, bi", rate: 0.55 },
   d: { text: "di, di, di", rate: 0.55 },
   g: { text: "gi, gi, gi", rate: 0.55 },
+  // Long vowels — used in CVCe (Magic E) lessons
+  a_e: { text: "ayyy", rate: 0.45 }, // long A as in "cake"
+  i_e: { text: "iyyy", rate: 0.45 }, // long I as in "bike"
+  o_e: { text: "ohhh", rate: 0.4 },  // long O as in "hope"
+  u_e: { text: "yooo", rate: 0.45 }, // long U as in "cute"
 };
 function speakPhoneme(letters: string) {
   const key = letters.toLowerCase();
@@ -181,6 +186,25 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   "action-make":  [{ word: "make", emoji: "🛠️" }, { word: "build", emoji: "🏗️" }, { word: "fix", emoji: "🔧" }, { word: "draw", emoji: "✏️" }, { word: "paint", emoji: "🎨" }],
   "action-help":  [{ word: "help", emoji: "🤝" }, { word: "share", emoji: "🎁" }, { word: "hug", emoji: "🤗" }, { word: "smile", emoji: "😊" }, { word: "wave", emoji: "👋" }],
   "action-clean": [{ word: "clean", emoji: "🧼" }, { word: "wash", emoji: "🚿" }, { word: "brush", emoji: "🪥" }, { word: "sweep", emoji: "🧹" }, { word: "dry", emoji: "🌬️" }],
+  // ── Sight Words (Dolch Pre-K) — abstract words get evocative emoji ─────────
+  "sight-pk-1": [{ word: "see", emoji: "👁️" }, { word: "I", emoji: "🙋" }, { word: "can", emoji: "💪" }, { word: "you", emoji: "👉" }, { word: "look", emoji: "👀" }],
+  "sight-pk-2": [{ word: "the", emoji: "📘" }, { word: "a", emoji: "🅰️" }, { word: "is", emoji: "🟰" }, { word: "and", emoji: "➕" }, { word: "to", emoji: "➡️" }],
+  "sight-pk-3": [{ word: "me", emoji: "🙋" }, { word: "my", emoji: "🫴" }, { word: "we", emoji: "👫" }, { word: "in", emoji: "📥" }, { word: "it", emoji: "👇" }],
+  "sight-pk-4": [{ word: "come", emoji: "👋" }, { word: "go", emoji: "🚀" }, { word: "here", emoji: "📍" }, { word: "find", emoji: "🔍" }, { word: "help", emoji: "🤝" }],
+  "sight-pk-5": [{ word: "jump", emoji: "🤸" }, { word: "big", emoji: "🐘" }, { word: "little", emoji: "🐜" }, { word: "up", emoji: "⬆️" }, { word: "down", emoji: "⬇️" }],
+  "sight-pk-6": [{ word: "red", emoji: "🔴" }, { word: "blue", emoji: "🔵" }, { word: "yellow", emoji: "🟡" }, { word: "one", emoji: "1️⃣" }, { word: "two", emoji: "2️⃣" }],
+  // ── Sight Words (Dolch Primer) ─────────────────────────────────────────────
+  "sight-prim-1": [{ word: "she", emoji: "👩" }, { word: "he", emoji: "👨" }, { word: "they", emoji: "👬" }, { word: "was", emoji: "⏪" }, { word: "are", emoji: "🟰" }],
+  "sight-prim-2": [{ word: "have", emoji: "✋" }, { word: "do", emoji: "🛠️" }, { word: "did", emoji: "☑️" }, { word: "will", emoji: "🎯" }, { word: "must", emoji: "❗" }],
+  "sight-prim-3": [{ word: "came", emoji: "🚶" }, { word: "went", emoji: "🏃" }, { word: "saw", emoji: "👀" }, { word: "ate", emoji: "🍽️" }, { word: "ran", emoji: "🏃" }],
+  "sight-prim-4": [{ word: "this", emoji: "👇" }, { word: "that", emoji: "👈" }, { word: "there", emoji: "📍" }, { word: "what", emoji: "❓" }, { word: "who", emoji: "🤔" }],
+  "sight-prim-5": [{ word: "new", emoji: "✨" }, { word: "black", emoji: "⚫" }, { word: "brown", emoji: "🟫" }, { word: "white", emoji: "⚪" }, { word: "pretty", emoji: "🌸" }],
+  "sight-prim-6": [{ word: "like", emoji: "❤️" }, { word: "want", emoji: "🙏" }, { word: "good", emoji: "👍" }, { word: "please", emoji: "🥺" }, { word: "yes", emoji: "✅" }],
+  // ── Magic E (CVCe) ─────────────────────────────────────────────────────────
+  "cvce-a": [{ word: "cake", emoji: "🎂" }, { word: "bake", emoji: "🍞" }, { word: "snake", emoji: "🐍" }, { word: "game", emoji: "🎲" }, { word: "plate", emoji: "🍽️" }],
+  "cvce-i": [{ word: "bike", emoji: "🚲" }, { word: "kite", emoji: "🪁" }, { word: "smile", emoji: "😊" }, { word: "time", emoji: "⏰" }, { word: "five", emoji: "5️⃣" }],
+  "cvce-o": [{ word: "rope", emoji: "🪢" }, { word: "nose", emoji: "👃" }, { word: "home", emoji: "🏠" }, { word: "bone", emoji: "🦴" }, { word: "stone", emoji: "🪨" }],
+  "cvce-u": [{ word: "cube", emoji: "🧊" }, { word: "tube", emoji: "🧪" }, { word: "flute", emoji: "🎶" }, { word: "mule", emoji: "🫏" }, { word: "prune", emoji: "🍇" }],
 };
 
 function wordsForLesson(lesson: LessonData): { word: string; emoji: string }[] {
@@ -719,6 +743,285 @@ const LESSONS: Record<string, LessonData> = {
     buildSlots: ["P", "L", "A", "Y"], buildTiles: ["P", "L", "A", "Y", "E", "T"],
     xpReward: 100, isBoss: true,
   },
+
+  // ── Level 6: Sight Words (Dolch Pre-K) ─────────────────────────────────────
+  // Irregular high-frequency words that can't reliably be sounded out.
+  // Research-backed: Dolch and Fry lists cover ~50-75% of all printed text.
+  // Strategy = memorize by sight, repeated exposure across multiple games.
+  "sight-pk-1": {
+    id: "sight-pk-1", phoneme: "Sight Words", word: "see", wordEmoji: "👁️",
+    tipText: "Sight words are words you'll SEE everywhere. Memorize them — don't sound them out!",
+    phonemeParts: [
+      { letters: "S", label: "Start", highlight: true },
+      { letters: "EE", label: "Long E", highlight: false },
+    ],
+    traceStrokes: ["M 270 75 Q 180 50 130 100 Q 90 140 180 165 Q 240 185 270 160"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(see|sees|i|can|you|look)\b/i,
+    buildSlots: ["S", "E", "E"], buildTiles: ["S", "E", "I", "C", "Y", "O"],
+    xpReward: 18,
+  },
+  "sight-pk-2": {
+    id: "sight-pk-2", phoneme: "Sight Words", word: "the", wordEmoji: "📘",
+    tipText: "Tiny words like \"the\" and \"and\" glue sentences together. They show up everywhere!",
+    phonemeParts: [
+      { letters: "TH", label: "TH start", highlight: true },
+      { letters: "E", label: "Short E", highlight: false },
+    ],
+    traceStrokes: ["M 60 75 L 300 75", "M 180 75 L 180 210"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(the|a|is|and|to)\b/i,
+    buildSlots: ["T", "H", "E"], buildTiles: ["T", "H", "E", "A", "I", "S"],
+    xpReward: 18,
+  },
+  "sight-pk-3": {
+    id: "sight-pk-3", phoneme: "Sight Words", word: "me", wordEmoji: "🙋",
+    tipText: "People words — me, you, we, my. They're about who's doing things!",
+    phonemeParts: [
+      { letters: "M", label: "Start", highlight: true },
+      { letters: "E", label: "Long E", highlight: false },
+    ],
+    traceStrokes: [
+      "M 60 200 L 60 50", "M 60 50 L 180 150",
+      "M 180 150 L 300 50", "M 300 50 L 300 200",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(me|my|we|in|it)\b/i,
+    buildSlots: ["M", "E"], buildTiles: ["M", "E", "Y", "W", "I", "T"],
+    xpReward: 18,
+  },
+  "sight-pk-4": {
+    id: "sight-pk-4", phoneme: "Sight Words", word: "come", wordEmoji: "👋",
+    tipText: "Movement and helping words — come, go, help, find. Action that connects people!",
+    phonemeParts: [
+      { letters: "C", label: "Start", highlight: true },
+      { letters: "OME", label: "The rest", highlight: false },
+    ],
+    traceStrokes: ["M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(come|go|here|find|help)\b/i,
+    buildSlots: ["C", "O", "M", "E"], buildTiles: ["C", "O", "M", "E", "G", "H"],
+    xpReward: 18,
+  },
+  "sight-pk-5": {
+    id: "sight-pk-5", phoneme: "Sight Words", word: "jump", wordEmoji: "🤸",
+    tipText: "Size and direction words — big, little, up, down. They paint a picture!",
+    phonemeParts: [
+      { letters: "J", label: "Start", highlight: true },
+      { letters: "UMP", label: "The rest", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 60 L 240 60",
+      "M 180 60 L 180 180 Q 180 220 130 220 Q 80 220 80 185",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(jump|big|little|up|down)\b/i,
+    buildSlots: ["J", "U", "M", "P"], buildTiles: ["J", "U", "M", "P", "B", "D"],
+    xpReward: 18,
+  },
+  "sight-pk-6": {
+    id: "sight-pk-6", phoneme: "Sight Words", word: "red", wordEmoji: "🔴",
+    tipText: "Colors and numbers — your favorites! Memorize them by sight.",
+    phonemeParts: [
+      { letters: "R", label: "Start", highlight: true },
+      { letters: "ED", label: "Short E", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210",
+      "M 80 50 Q 240 50 240 115 Q 240 175 80 175",
+      "M 140 175 L 260 220",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(red|blue|yellow|one|two)\b/i,
+    buildSlots: ["R", "E", "D"], buildTiles: ["R", "E", "D", "B", "Y", "O"],
+    xpReward: 18,
+  },
+  "sight-boss-pk": {
+    id: "sight-boss-pk", phoneme: "Pre-K Done!", word: "amazing", wordEmoji: "⭐",
+    tipText: "Pre-K sight words done — that's 30 of the most-used words in English. Next tier unlocked!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["S", "E", "E"], buildTiles: ["S", "E", "T", "H", "M", "I"],
+    xpReward: 75, isBoss: true,
+  },
+
+  // ── Level 6b: Sight Words (Dolch Primer) ───────────────────────────────────
+  // Higher-frequency words used everywhere. Includes the to-be verbs, helping
+  // verbs, common pronouns, and color/feeling vocabulary.
+  "sight-prim-1": {
+    id: "sight-prim-1", phoneme: "Sight Words", word: "she", wordEmoji: "👩",
+    tipText: "Pronouns! He, she, they — words for the people we talk about.",
+    phonemeParts: [
+      { letters: "SH", label: "SH start", highlight: true },
+      { letters: "E", label: "Long E", highlight: false },
+    ],
+    traceStrokes: [
+      "M 150 70 Q 60 60 60 105 Q 60 135 105 135 Q 150 135 150 165 Q 150 200 60 195",
+      "M 210 60 L 210 200", "M 300 60 L 300 200", "M 210 130 L 300 130",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(she|he|they|was|are)\b/i,
+    buildSlots: ["S", "H", "E"], buildTiles: ["S", "H", "E", "T", "A", "Y"],
+    xpReward: 20,
+  },
+  "sight-prim-2": {
+    id: "sight-prim-2", phoneme: "Sight Words", word: "have", wordEmoji: "✋",
+    tipText: "Helping words! Have, do, did, will — they team up with other verbs.",
+    phonemeParts: [
+      { letters: "H", label: "Start", highlight: true },
+      { letters: "AVE", label: "Long A", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210", "M 280 50 L 280 210", "M 80 130 L 280 130",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(have|do|did|will|must)\b/i,
+    buildSlots: ["H", "A", "V", "E"], buildTiles: ["H", "A", "V", "E", "D", "W"],
+    xpReward: 20,
+  },
+  "sight-prim-3": {
+    id: "sight-prim-3", phoneme: "Sight Words", word: "came", wordEmoji: "🚶",
+    tipText: "Past-tense verbs! Came, went, saw — things that already happened.",
+    phonemeParts: [
+      { letters: "C", label: "Start", highlight: true },
+      { letters: "AME", label: "Long A", highlight: false },
+    ],
+    traceStrokes: ["M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(came|went|saw|ate|ran)\b/i,
+    buildSlots: ["C", "A", "M", "E"], buildTiles: ["C", "A", "M", "E", "W", "T"],
+    xpReward: 20,
+  },
+  "sight-prim-4": {
+    id: "sight-prim-4", phoneme: "Sight Words", word: "this", wordEmoji: "👇",
+    tipText: "Pointing & asking words! This, that, what, who — you'll see them in every question.",
+    phonemeParts: [
+      { letters: "TH", label: "TH start", highlight: true },
+      { letters: "IS", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 60 75 L 300 75", "M 180 75 L 180 210"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(this|that|there|what|who)\b/i,
+    buildSlots: ["T", "H", "I", "S"], buildTiles: ["T", "H", "I", "S", "A", "W"],
+    xpReward: 20,
+  },
+  "sight-prim-5": {
+    id: "sight-prim-5", phoneme: "Sight Words", word: "new", wordEmoji: "✨",
+    tipText: "Colors & descriptors! Black, white, brown, pretty, new — they paint a picture.",
+    phonemeParts: [
+      { letters: "N", label: "Start", highlight: true },
+      { letters: "EW", label: "Long U", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210", "M 80 50 L 280 210", "M 280 50 L 280 210",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(new|black|brown|white|pretty)\b/i,
+    buildSlots: ["N", "E", "W"], buildTiles: ["N", "E", "W", "B", "P", "T"],
+    xpReward: 20,
+  },
+  "sight-prim-6": {
+    id: "sight-prim-6", phoneme: "Sight Words", word: "like", wordEmoji: "❤️",
+    tipText: "Feelings & preferences! Like, want, good, please — the polite words.",
+    phonemeParts: [
+      { letters: "L", label: "Start", highlight: true },
+      { letters: "IKE", label: "Long I", highlight: false },
+    ],
+    traceStrokes: [
+      "M 100 50 L 100 210",
+      "M 100 210 L 260 210",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(like|want|good|please|yes)\b/i,
+    buildSlots: ["L", "I", "K", "E"], buildTiles: ["L", "I", "K", "E", "W", "G"],
+    xpReward: 20,
+  },
+  "sight-master": {
+    id: "sight-master", phoneme: "Sight Master!", word: "champion", wordEmoji: "🏆",
+    tipText: "You learned 60+ of the most-used English words. You can read SO much now!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["L", "I", "K", "E"], buildTiles: ["L", "I", "K", "E", "S", "H"],
+    xpReward: 150, isBoss: true,
+  },
+
+  // ── Level 7: Magic E / CVCe ────────────────────────────────────────────────
+  // Silent E at the end of a word makes the vowel "say its name".
+  // cap → cape, kit → kite, hop → hope, cut → cute. Standard 1st-grade phonics.
+  "cvce-a": {
+    id: "cvce-a", phoneme: "a_e", word: "cake", wordEmoji: "🎂",
+    tipText: "Magic E! Add an E at the end and the A says its name — \"AY\" not \"ahh\".",
+    phonemeParts: [
+      { letters: "C", label: "Start", highlight: false },
+      { letters: "A", label: "Long A", highlight: true },
+      { letters: "K", label: "Middle", highlight: false },
+      { letters: "E", label: "Silent E ✨", highlight: true },
+    ],
+    traceStrokes: ["M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(cake|bake|lake|name|game|made|came|take|snake|plate)\b/i,
+    buildSlots: ["C", "A", "K", "E"], buildTiles: ["C", "A", "K", "E", "B", "T"],
+    xpReward: 25,
+  },
+  "cvce-i": {
+    id: "cvce-i", phoneme: "i_e", word: "bike", wordEmoji: "🚲",
+    tipText: "I + Magic E! The I says \"EYE\" — like \"bike\" sounds like \"BIKE\" not \"bick\".",
+    phonemeParts: [
+      { letters: "B", label: "Start", highlight: false },
+      { letters: "I", label: "Long I", highlight: true },
+      { letters: "K", label: "Middle", highlight: false },
+      { letters: "E", label: "Silent E ✨", highlight: true },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210",
+      "M 80 50 Q 240 50 240 110 Q 240 130 80 130",
+      "M 80 130 Q 250 130 250 175 Q 250 210 80 210",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(bike|like|time|five|ride|smile|kite|mine|side|line)\b/i,
+    buildSlots: ["B", "I", "K", "E"], buildTiles: ["B", "I", "K", "E", "L", "T"],
+    xpReward: 25,
+  },
+  "cvce-o": {
+    id: "cvce-o", phoneme: "o_e", word: "hope", wordEmoji: "🌟",
+    tipText: "O + Magic E! O says its name — \"OH\". Hope, rope, home, nose!",
+    phonemeParts: [
+      { letters: "H", label: "Start", highlight: false },
+      { letters: "O", label: "Long O", highlight: true },
+      { letters: "P", label: "Middle", highlight: false },
+      { letters: "E", label: "Silent E ✨", highlight: true },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210", "M 280 50 L 280 210", "M 80 130 L 280 130",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(hope|rope|nose|home|joke|note|those|broke|stone)\b/i,
+    buildSlots: ["H", "O", "P", "E"], buildTiles: ["H", "O", "P", "E", "R", "N"],
+    xpReward: 25,
+  },
+  "cvce-u": {
+    id: "cvce-u", phoneme: "u_e", word: "cute", wordEmoji: "🐶",
+    tipText: "U + Magic E! U says \"YOU\" — cute, cube, tube, use!",
+    phonemeParts: [
+      { letters: "C", label: "Start", highlight: false },
+      { letters: "U", label: "Long U", highlight: true },
+      { letters: "T", label: "Middle", highlight: false },
+      { letters: "E", label: "Silent E ✨", highlight: true },
+    ],
+    traceStrokes: ["M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(cute|cube|tube|use|mute|huge|rule|tune|June)\b/i,
+    buildSlots: ["C", "U", "T", "E"], buildTiles: ["C", "U", "T", "E", "B", "M"],
+    xpReward: 25,
+  },
+  "cvce-boss": {
+    id: "cvce-boss", phoneme: "Magic E!", word: "magic", wordEmoji: "🪄",
+    tipText: "You mastered Magic E! Now you can read TONS of new words.",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["C", "A", "K", "E"], buildTiles: ["C", "A", "K", "E", "B", "T"],
+    xpReward: 125, isBoss: true,
+  },
 };
 
 const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x: number }[] = [
@@ -759,6 +1062,28 @@ const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x
   { id: "action-help",  label: "Help",         sub: "help, share, hug",   boss: false, x: 140 },
   { id: "action-clean", label: "Clean",        sub: "clean, wash, brush", boss: false, x: 80 },
   { id: "action-boss",  label: "Action Hero!", sub: "All action words!",  boss: true,  x: 195 },
+  // Level 6 — Sight Words (Dolch Pre-K)
+  { id: "sight-pk-1",    label: "See & I",      sub: "see, I, can, you",   boss: false, x: 80 },
+  { id: "sight-pk-2",    label: "The & And",    sub: "the, a, is, and",    boss: false, x: 240 },
+  { id: "sight-pk-3",    label: "Me & We",      sub: "me, my, we, in",     boss: false, x: 140 },
+  { id: "sight-pk-4",    label: "Come & Go",    sub: "come, go, here",     boss: false, x: 60 },
+  { id: "sight-pk-5",    label: "Big & Little", sub: "big, little, up",    boss: false, x: 240 },
+  { id: "sight-pk-6",    label: "Colors",       sub: "red, blue, yellow",  boss: false, x: 140 },
+  { id: "sight-boss-pk", label: "Pre-K Done!",  sub: "Pre-K tier complete", boss: true,  x: 195 },
+  // Level 6b — Sight Words: Primer
+  { id: "sight-prim-1",  label: "He & She",     sub: "she, he, they",      boss: false, x: 80 },
+  { id: "sight-prim-2",  label: "Have & Do",    sub: "have, do, did, will",boss: false, x: 240 },
+  { id: "sight-prim-3",  label: "Came & Went",  sub: "past-tense verbs",   boss: false, x: 140 },
+  { id: "sight-prim-4",  label: "This & That",  sub: "this, what, who",    boss: false, x: 60 },
+  { id: "sight-prim-5",  label: "More Colors",  sub: "black, white, new",  boss: false, x: 240 },
+  { id: "sight-prim-6",  label: "Like & Want",  sub: "like, want, good",   boss: false, x: 140 },
+  { id: "sight-master",  label: "Sight Master", sub: "60+ words!",         boss: true,  x: 195 },
+  // Level 7 — Magic E (CVCe)
+  { id: "cvce-a",        label: "A + Magic E",  sub: "cake, name, snake",  boss: false, x: 80 },
+  { id: "cvce-i",        label: "I + Magic E",  sub: "bike, kite, time",   boss: false, x: 240 },
+  { id: "cvce-o",        label: "O + Magic E",  sub: "hope, rope, nose",   boss: false, x: 140 },
+  { id: "cvce-u",        label: "U + Magic E",  sub: "cute, cube, tube",   boss: false, x: 60 },
+  { id: "cvce-boss",     label: "Magic E Master",sub:"Silent E expert!",   boss: true,  x: 195 },
 ];
 
 // ─── Categories — independent learning tracks ────────────────────────────────
@@ -818,6 +1143,31 @@ const CATEGORIES: LessonCategory[] = [
       "action-run", "action-jump", "action-look", "action-make",
       "action-help", "action-clean", "action-boss",
     ],
+  },
+  {
+    id: "sight-words",
+    label: "Sight Words",
+    sub: "60+ most-used words",
+    emoji: "👀",
+    gradient: ["#7C6FE0", "#5645B8"],
+    lessonIds: [
+      // Pre-K tier
+      "sight-pk-1", "sight-pk-2", "sight-pk-3",
+      "sight-pk-4", "sight-pk-5", "sight-pk-6",
+      "sight-boss-pk",
+      // Primer tier
+      "sight-prim-1", "sight-prim-2", "sight-prim-3",
+      "sight-prim-4", "sight-prim-5", "sight-prim-6",
+      "sight-master",
+    ],
+  },
+  {
+    id: "magic-e",
+    label: "Magic E",
+    sub: "Silent E unlocks long vowels",
+    emoji: "🪄",
+    gradient: ["#9B7EFF", "#6C47FF"],
+    lessonIds: ["cvce-a", "cvce-i", "cvce-o", "cvce-u", "cvce-boss"],
   },
 ];
 
