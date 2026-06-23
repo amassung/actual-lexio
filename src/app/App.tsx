@@ -174,7 +174,13 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   "action-play": [{ word: "play", emoji: "🎮" }, { word: "paint", emoji: "🎨" }, { word: "push", emoji: "🤚" }, { word: "pull", emoji: "💪" }, { word: "plant", emoji: "🌱" }],
   "action-eat":  [{ word: "eat", emoji: "🍽️" }, { word: "drink", emoji: "🥤" }, { word: "chew", emoji: "😋" }, { word: "sip", emoji: "🥛" }, { word: "snack", emoji: "🍪" }],
   "action-sing": [{ word: "sing", emoji: "🎤" }, { word: "shout", emoji: "📢" }, { word: "smile", emoji: "😊" }, { word: "talk", emoji: "💬" }, { word: "wave", emoji: "👋" }],
-  "action-nap":  [{ word: "nap", emoji: "😴" }, { word: "rest", emoji: "🛌" }, { word: "yawn", emoji: "🥱" }, { word: "stretch", emoji: "🧘" }, { word: "dream", emoji: "💭" }],
+  "action-nap":   [{ word: "nap", emoji: "😴" }, { word: "rest", emoji: "🛌" }, { word: "yawn", emoji: "🥱" }, { word: "stretch", emoji: "🧘" }, { word: "dream", emoji: "💭" }],
+  "action-run":   [{ word: "run", emoji: "🏃" }, { word: "jog", emoji: "🚶" }, { word: "hop", emoji: "🦘" }, { word: "skip", emoji: "👯" }, { word: "race", emoji: "🏁" }],
+  "action-jump":  [{ word: "jump", emoji: "🤸" }, { word: "leap", emoji: "🐸" }, { word: "fly", emoji: "🕊️" }, { word: "climb", emoji: "🧗" }, { word: "swim", emoji: "🏊" }],
+  "action-look":  [{ word: "look", emoji: "👀" }, { word: "see", emoji: "👁️" }, { word: "watch", emoji: "📺" }, { word: "read", emoji: "📖" }, { word: "find", emoji: "🔍" }],
+  "action-make":  [{ word: "make", emoji: "🛠️" }, { word: "build", emoji: "🏗️" }, { word: "fix", emoji: "🔧" }, { word: "draw", emoji: "✏️" }, { word: "paint", emoji: "🎨" }],
+  "action-help":  [{ word: "help", emoji: "🤝" }, { word: "share", emoji: "🎁" }, { word: "hug", emoji: "🤗" }, { word: "smile", emoji: "😊" }, { word: "wave", emoji: "👋" }],
+  "action-clean": [{ word: "clean", emoji: "🧼" }, { word: "wash", emoji: "🚿" }, { word: "brush", emoji: "🪥" }, { word: "sweep", emoji: "🧹" }, { word: "dry", emoji: "🌬️" }],
 };
 
 function wordsForLesson(lesson: LessonData): { word: string; emoji: string }[] {
@@ -602,6 +608,109 @@ const LESSONS: Record<string, LessonData> = {
     buildSlots: ["N", "A", "P"], buildTiles: ["N", "A", "P", "S", "T", "M"],
     xpReward: 20,
   },
+  "action-run": {
+    id: "action-run", phoneme: "R", word: "run", wordEmoji: "🏃",
+    tipText: "Run means to go fast on your feet! R says \"rrr\" — like a tiger growling.",
+    phonemeParts: [
+      { letters: "R", label: "The sound", highlight: true },
+      { letters: "U", label: "Short U", highlight: false },
+      { letters: "N", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210",
+      "M 80 50 Q 240 50 240 115 Q 240 175 80 175",
+      "M 140 175 L 260 220",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(run|runs|running|jog|hop|skip|walk|race|dash|sprint)\b/i,
+    buildSlots: ["R", "U", "N"], buildTiles: ["R", "U", "N", "S", "P", "A"],
+    xpReward: 20,
+  },
+  "action-jump": {
+    id: "action-jump", phoneme: "J", word: "jump", wordEmoji: "🤸",
+    tipText: "Jump means up into the air! J says \"juh\" — quick and crisp.",
+    phonemeParts: [
+      { letters: "J", label: "The sound", highlight: true },
+      { letters: "U", label: "Short U", highlight: false },
+      { letters: "MP", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 60 L 240 60",
+      "M 180 60 L 180 180 Q 180 220 130 220 Q 80 220 80 185",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(jump|jumps|jumping|leap|fly|climb|swim|hop|bounce)\b/i,
+    buildSlots: ["J", "U", "M", "P"], buildTiles: ["J", "U", "M", "P", "R", "T"],
+    xpReward: 20,
+  },
+  "action-look": {
+    id: "action-look", phoneme: "L", word: "look", wordEmoji: "👀",
+    tipText: "Look means to use your eyes! L says \"lll\" — tip your tongue up.",
+    phonemeParts: [
+      { letters: "L", label: "The sound", highlight: true },
+      { letters: "OO", label: "Long OO", highlight: false },
+      { letters: "K", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 100 50 L 100 210",
+      "M 100 210 L 260 210",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(look|looks|looking|see|watch|read|find|peek)\b/i,
+    buildSlots: ["L", "O", "O", "K"], buildTiles: ["L", "O", "K", "B", "S", "T"],
+    xpReward: 20,
+  },
+  "action-make": {
+    id: "action-make", phoneme: "M", word: "make", wordEmoji: "🛠️",
+    tipText: "Make means to build something new! M says \"mmm\" — hum with closed lips.",
+    phonemeParts: [
+      { letters: "M", label: "The sound", highlight: true },
+      { letters: "A", label: "Long A", highlight: false },
+      { letters: "KE", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 60 200 L 60 50", "M 60 50 L 180 150",
+      "M 180 150 L 300 50", "M 300 50 L 300 200",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(make|makes|making|build|fix|draw|paint|create)\b/i,
+    buildSlots: ["M", "A", "K", "E"], buildTiles: ["M", "A", "K", "E", "S", "T"],
+    xpReward: 20,
+  },
+  "action-help": {
+    id: "action-help", phoneme: "H", word: "help", wordEmoji: "🤝",
+    tipText: "Help means to be kind to others! H says \"huh\" — a soft puff of breath.",
+    phonemeParts: [
+      { letters: "H", label: "The sound", highlight: true },
+      { letters: "E", label: "Short E", highlight: false },
+      { letters: "LP", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210",
+      "M 280 50 L 280 210",
+      "M 80 130 L 280 130",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(help|helps|helping|share|hug|smile|wave|care)\b/i,
+    buildSlots: ["H", "E", "L", "P"], buildTiles: ["H", "E", "L", "P", "M", "S"],
+    xpReward: 20,
+  },
+  "action-clean": {
+    id: "action-clean", phoneme: "C", word: "clean", wordEmoji: "🧼",
+    tipText: "Clean means to wash and tidy up! C makes a \"kuh\" sound here.",
+    phonemeParts: [
+      { letters: "C", label: "The sound", highlight: true },
+      { letters: "L", label: "Blend", highlight: false },
+      { letters: "EAN", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 280 90 Q 220 50 150 90 Q 90 130 150 190 Q 220 230 280 190",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(clean|cleans|cleaning|wash|brush|sweep|scrub|dry)\b/i,
+    buildSlots: ["C", "L", "E", "A", "N"], buildTiles: ["C", "L", "E", "A", "N", "S"],
+    xpReward: 20,
+  },
   "action-boss": {
     id: "action-boss", phoneme: "Action!", word: "verbs", wordEmoji: "🏆",
     tipText: "You learned tons of action words — keep doing, reading, and growing!",
@@ -639,11 +748,17 @@ const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x
   { id: "long-o",      label: "Long O",     sub: "boat, road, coat",   boss: false, x: 60 },
   { id: "vowel-boss-2",label: "Vowel Master!",sub: "All vowels!",      boss: true,  x: 195 },
   // Level 5 — Action Words (verbs in context, inspired by the AAC "Action Words" set)
-  { id: "action-play", label: "Play",          sub: "play, push, paint",  boss: false, x: 80 },
-  { id: "action-eat",  label: "Eat",           sub: "eat, drink, chew",   boss: false, x: 240 },
-  { id: "action-sing", label: "Sing",          sub: "sing, say, shout",   boss: false, x: 140 },
-  { id: "action-nap",  label: "Nap",           sub: "nap, rest, yawn",    boss: false, x: 60 },
-  { id: "action-boss", label: "Action Hero!",  sub: "All action words!",  boss: true,  x: 195 },
+  { id: "action-play",  label: "Play",         sub: "play, push, paint",  boss: false, x: 80 },
+  { id: "action-eat",   label: "Eat",          sub: "eat, drink, chew",   boss: false, x: 240 },
+  { id: "action-sing",  label: "Sing",         sub: "sing, say, shout",   boss: false, x: 140 },
+  { id: "action-nap",   label: "Nap",          sub: "nap, rest, yawn",    boss: false, x: 60 },
+  { id: "action-run",   label: "Run",          sub: "run, jog, race",     boss: false, x: 240 },
+  { id: "action-jump",  label: "Jump",         sub: "jump, leap, climb",  boss: false, x: 140 },
+  { id: "action-look",  label: "Look",         sub: "look, see, find",    boss: false, x: 60 },
+  { id: "action-make",  label: "Make",         sub: "make, build, draw",  boss: false, x: 240 },
+  { id: "action-help",  label: "Help",         sub: "help, share, hug",   boss: false, x: 140 },
+  { id: "action-clean", label: "Clean",        sub: "clean, wash, brush", boss: false, x: 80 },
+  { id: "action-boss",  label: "Action Hero!", sub: "All action words!",  boss: true,  x: 195 },
 ];
 
 // ─── Categories — independent learning tracks ────────────────────────────────
@@ -695,10 +810,14 @@ const CATEGORIES: LessonCategory[] = [
   {
     id: "action-words",
     label: "Action Words",
-    sub: "Play, Eat, Sing, Nap",
+    sub: "11 verbs — what you DO",
     emoji: "🏃",
     gradient: [C.glow, C.glowDark],
-    lessonIds: ["action-play", "action-eat", "action-sing", "action-nap", "action-boss"],
+    lessonIds: [
+      "action-play", "action-eat", "action-sing", "action-nap",
+      "action-run", "action-jump", "action-look", "action-make",
+      "action-help", "action-clean", "action-boss",
+    ],
   },
 ];
 
@@ -4147,6 +4266,134 @@ function SpellingBeeGame({ lesson, onFinish, onCorrect, onWrong }: {
   );
 }
 
+// ─── Mini-Game: What's the Action? ────────────────────────────────────────────
+// Visual → semantic game. Tailored for action words: shows a BIG silent
+// emoji (no auto-audio) and asks the kid to identify the verb. Picks 4 word
+// labels — the correct one + 3 verb distractors from the same lesson pool.
+// Different from Photo Touch (which is audio-first); here the kid must
+// recognize the meaning visually before tapping.
+function WhatsTheActionGame({ lesson, onFinish, onCorrect, onWrong }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const ROUNDS = 4;
+
+  const rounds = useMemo(() => {
+    const pool = wordsForLesson(lesson);
+    const targets = shuffleAndSlice(pool, ROUNDS);
+    return targets.map((target) => {
+      const distractors = pickDistractorWords(lesson.id, target.word, 3);
+      const choices = [target, ...distractors].sort(() => Math.random() - 0.5);
+      return { target, choices };
+    });
+  }, [lesson]);
+
+  const [round, setRound] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
+  const current = rounds[round];
+
+  // Reset on round change but DO NOT auto-play audio (this is the differentiator)
+  useEffect(() => {
+    setPicked(null); setLocked(false);
+    cancelTTS();
+  }, [round]);
+
+  const onChoose = (word: string) => {
+    if (locked) return;
+    setLocked(true);
+    setPicked(word);
+    const isRight = word === current.target.word;
+    if (isRight) onCorrect?.(); else onWrong?.();
+    // Play the chosen word (so kid hears their attempt)
+    void playTTS(word, { rate: 0.9 });
+    setTimeout(() => {
+      if (round + 1 >= ROUNDS) onFinish();
+      else setRound(r => r + 1);
+    }, 1100);
+  };
+
+  if (!current) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Progress dots */}
+      <div className="flex gap-2 mb-2">
+        {rounds.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === round ? 24 : 8, height: 8, borderRadius: 4,
+              background: i <= round ? C.glow : C.primarySoft,
+              transition: "all 0.3s",
+            }}
+          />
+        ))}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+        What's happening?
+      </div>
+
+      {/* Big silent emoji — the visual question */}
+      <motion.div
+        key={round}
+        initial={{ scale: 0.7, opacity: 0, y: 14 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ type: "spring", bounce: 0.45 }}
+        style={{
+          fontSize: 140, lineHeight: 1,
+          padding: 20, borderRadius: 32,
+          background: `linear-gradient(135deg, ${C.yellowSoft}, ${C.glow}33)`,
+          border: `3px solid ${C.glow}`,
+        }}
+      >
+        {current.target.emoji}
+      </motion.div>
+
+      {/* Verb choices — 2×2 grid of word tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%" }}>
+        {current.choices.map((c) => {
+          const isPicked = picked === c.word;
+          const isCorrect = c.word === current.target.word;
+          const showRight = picked !== null && isCorrect;
+          const showWrong = isPicked && !isCorrect;
+          return (
+            <motion.button
+              key={c.word}
+              whileTap={{ scale: locked ? 1 : 0.94 }}
+              animate={showWrong ? { x: [0, -6, 6, -6, 6, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              onClick={() => onChoose(c.word)}
+              disabled={locked}
+              style={{
+                padding: "16px 12px",
+                background: showRight ? C.tealSoft : showWrong ? "#FFE0E0" : C.white,
+                border: `3px solid ${showRight ? C.teal : showWrong ? "#E08080" : C.primarySoft}`,
+                borderRadius: 18,
+                cursor: locked ? "default" : "pointer",
+                fontFamily: uiFont,
+                fontSize: 20, fontWeight: 800,
+                color: C.ink,
+                textTransform: "lowercase",
+                transition: "background 0.2s, border 0.2s",
+              }}
+            >
+              {c.word}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        Round {round + 1} of {ROUNDS}
+      </div>
+    </div>
+  );
+}
+
 // ─── Games Grid Screen ────────────────────────────────────────────────────────
 // Kid-facing "pick a game" surface for a single lesson. Every tile teaches the
 // same target phoneme (the lesson's phoneme). Two tiles are wired to real
@@ -4157,7 +4404,7 @@ function SpellingBeeGame({ lesson, onFinish, onCorrect, onWrong }: {
 //   "grid"    → tile grid + Finish Lesson CTA
 //   "playing" → renders a single game with a back chevron
 //   "win"     → existing WinScreen + LessonUnlockOverlay flow
-type GameKey = "trace" | "build" | "flashcards" | "listen-up" | "fill-blank" | "photo-touch" | "sound-match" | "memory" | "true-false" | "spelling-bee" | "word-sort" | "unscramble";
+type GameKey = "trace" | "build" | "flashcards" | "listen-up" | "fill-blank" | "photo-touch" | "sound-match" | "memory" | "true-false" | "spelling-bee" | "whats-action" | "word-sort" | "unscramble";
 
 type GameTile = {
   key: GameKey;
@@ -4224,6 +4471,7 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
     { key: "memory",       title: "Memory Cards",   subtitle: "Match the pairs",   emoji: "🧠", gradient: ["#C4B0FF", C.primary],       status: "active" },
     { key: "true-false",   title: "True or False",  subtitle: "Real or wrong?",    emoji: "✅", gradient: ["#5DCAA5", "#3DB88A"],       status: "active" },
     { key: "spelling-bee", title: "Spelling Bee",   subtitle: "Spell the word",    emoji: "🐝", gradient: ["#F4A261", "#D17A1E"],       status: "active" },
+    { key: "whats-action", title: "What's Happening?", subtitle: "Name the action",emoji: "🎬", gradient: [C.glow,    C.glowDark],      status: "active" },
     { key: "word-sort",    title: "Word Sort",      subtitle: "Sort the sounds",   emoji: "🗂️", gradient: [C.sky,     "#5092C7"],       status: "coming" },
     { key: "unscramble",   title: "Unscramble",     subtitle: "Fix the word",      emoji: "🔀", gradient: ["#A89BFF", "#7C6FE0"],       status: "coming" },
   ];
@@ -4344,6 +4592,9 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
           )}
           {activeGame === "spelling-bee" && (
             <SpellingBeeGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
+          )}
+          {activeGame === "whats-action" && (
+            <WhatsTheActionGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
           )}
         </div>
       </div>
@@ -5107,6 +5358,7 @@ function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onO
           { key: "memory",       label: "Memory Cards",  emoji: "🧠", color: C.primary },
           { key: "true-false",   label: "True or False", emoji: "✅", color: C.teal },
           { key: "spelling-bee", label: "Spelling Bee",  emoji: "🐝", color: C.amber },
+          { key: "whats-action", label: "What's Happening?", emoji: "🎬", color: C.glow },
         ];
         const fmtTime = (ms: number) => {
           if (ms <= 0) return "—";
