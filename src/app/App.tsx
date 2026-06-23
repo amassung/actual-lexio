@@ -67,11 +67,14 @@ function speak(text: string, opts: SpeakOpts = {}) {
 //
 // Better still: drop a recorded clip at public/audio/phonemes/{key}.mp3 and
 // playPhonemeFile() picks it up automatically, bypassing TTS entirely.
+// PHONEME_MAP — spellings sent to ElevenLabs to produce isolated phonics
+// sounds. KEEP ALL-LOWERCASE for continuants — uppercase initial letters can
+// trick the model into reading them as letter names ("Ess", "Em").
 const PHONEME_MAP: Record<string, { text: string; rate: number }> = {
-  // Digraphs / blends — TTS handles these reasonably well
-  sh: { text: "Shhhhh", rate: 0.4 },
+  // Digraphs / blends
+  sh: { text: "shhhhhhh", rate: 0.4 },
   ch: { text: "ch, ch, ch", rate: 0.5 },
-  th: { text: "Thhhh", rate: 0.4 },
+  th: { text: "thhhhhhh", rate: 0.4 },
   wh: { text: "wh, wh", rate: 0.5 },
   // Vowels — short sounds
   a: { text: "ahh", rate: 0.5 },
@@ -80,14 +83,14 @@ const PHONEME_MAP: Record<string, { text: string; rate: number }> = {
   o: { text: "ahh", rate: 0.5 },
   u: { text: "uhh", rate: 0.55 },
   // Continuants — sustained / drawn out
-  m: { text: "Mmmmmmm", rate: 0.35 },
-  n: { text: "Nnnnnnn", rate: 0.35 },
-  s: { text: "Sssssss", rate: 0.4 },
-  f: { text: "Ffffff", rate: 0.4 },
-  l: { text: "Llllll", rate: 0.4 },
-  r: { text: "Rrrrrr", rate: 0.45 },
-  z: { text: "Zzzzzz", rate: 0.4 },
-  v: { text: "Vvvvvv", rate: 0.4 },
+  m: { text: "mmmmmmmm", rate: 0.35 },
+  n: { text: "nnnnnnnn", rate: 0.35 },
+  s: { text: "ssssssss", rate: 0.4 },
+  f: { text: "ffffffff", rate: 0.4 },
+  l: { text: "llllllll", rate: 0.4 },
+  r: { text: "rrrrrrrr", rate: 0.45 },
+  z: { text: "zzzzzzzz", rate: 0.4 },
+  v: { text: "vvvvvvvv", rate: 0.4 },
   // Stops — pair with short "i" rather than schwa "uh"
   t: { text: "ti, ti, ti", rate: 0.55 },
   p: { text: "pi, pi, pi", rate: 0.55 },
@@ -102,7 +105,10 @@ function speakPhoneme(letters: string) {
   void playPhonemeFile(key).then(played => {
     if (played) return;
     const entry = PHONEME_MAP[key] ?? { text: letters, rate: 0.55 };
-    void playTTS(entry.text, { rate: entry.rate });
+    // raw:true → skip sentence-period append AND disable ElevenLabs text
+    // normalization, so spellings like "ssssssss" stay literal instead of
+    // being re-read as a name/word.
+    void playTTS(entry.text, { rate: entry.rate, raw: true });
   });
 }
 // Sound out a phoneme + word: "shh… shh… ship". Chained as a real sequence

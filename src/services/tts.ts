@@ -14,6 +14,10 @@
 export type TTSOpts = {
   rate?: number;          // 0.5–1.5; maps to ElevenLabs voice_settings.speed
   voiceId?: string;       // overrides VITE_ELEVENLABS_VOICE_ID
+  // When true: skip the sentence-form period append AND disable ElevenLabs'
+  // automatic text normalization. Use for isolated phoneme spellings like
+  // "Sssssss" so the model treats them as the literal sound, not as a name.
+  raw?: boolean;
 };
 
 const KEY = (import.meta as any).env?.VITE_ELEVENLABS_API_KEY as string | undefined;
@@ -26,15 +30,30 @@ const blobCache = new Map<string, Promise<Blob>>();
 let currentAudio: HTMLAudioElement | null = null;
 
 function cacheKey(text: string, opts: TTSOpts) {
-  return `${opts.voiceId ?? DEFAULT_VOICE}|${opts.rate ?? 1}|${text}`;
+  return `${opts.voiceId ?? DEFAULT_VOICE}|${opts.rate ?? 1}|${opts.raw ? "raw" : "sent"}|${text}`;
+}
+
+// Wrap bare single words / fragments in a period so ElevenLabs treats them
+// as a complete utterance. Without this, "mat" gets sent with no prosodic
+// context and can come out clipped or with a weird up-inflection ("mat?").
+// SSML phoneme tags pass through untouched.
+function ensureSentenceForm(text: string): string {
+  const t = text.trim();
+  if (!t) return t;
+  if (t.startsWith("<")) return t; // already SSML / phoneme tag
+  if (/[.!?]$/.test(t)) return t;
+  return t + ".";
 }
 
 async function fetchElevenLabs(text: string, opts: TTSOpts): Promise<Blob> {
   if (!KEY) throw new Error("VITE_ELEVENLABS_API_KEY not set");
   const voice = opts.voiceId ?? DEFAULT_VOICE;
   const body: Record<string, unknown> = {
-    text,
+    text: opts.raw ? text : ensureSentenceForm(text),
     model_id: MODEL_ID,
+    // For raw phoneme spellings, kill ElevenLabs' word-normalization pass —
+    // otherwise "Sssssss" can be re-read as a name/word and come out garbled.
+    ...(opts.raw ? { apply_text_normalization: "off" } : {}),
     voice_settings: {
       stability: 0.8,         // higher = steadier on sustained sounds like "ssssss"
       similarity_boost: 0.95, // stay very close to the cloned voice — kills the "off" sounds
