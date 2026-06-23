@@ -170,6 +170,11 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   "sh-sound":  [{ word: "ship", emoji: "🚢" }, { word: "shell", emoji: "🐚" }, { word: "fish", emoji: "🐟" }, { word: "sheep", emoji: "🐑" }, { word: "shoe", emoji: "👟" }],
   "ch-sound":  [{ word: "cheese", emoji: "🧀" }, { word: "cherry", emoji: "🍒" }, { word: "chair", emoji: "🪑" }, { word: "cheetah", emoji: "🐆" }, { word: "chick", emoji: "🐥" }],
   "th-sound":  [{ word: "thumb", emoji: "👍" }, { word: "three", emoji: "3️⃣" }, { word: "bath", emoji: "🛁" }, { word: "teeth", emoji: "🦷" }, { word: "thread", emoji: "🧵" }],
+  // ── Level 5: Action Words (verbs in context) ───────────────────────────────
+  "action-play": [{ word: "play", emoji: "🎮" }, { word: "paint", emoji: "🎨" }, { word: "push", emoji: "🤚" }, { word: "pull", emoji: "💪" }, { word: "plant", emoji: "🌱" }],
+  "action-eat":  [{ word: "eat", emoji: "🍽️" }, { word: "drink", emoji: "🥤" }, { word: "chew", emoji: "😋" }, { word: "sip", emoji: "🥛" }, { word: "snack", emoji: "🍪" }],
+  "action-sing": [{ word: "sing", emoji: "🎤" }, { word: "shout", emoji: "📢" }, { word: "smile", emoji: "😊" }, { word: "talk", emoji: "💬" }, { word: "wave", emoji: "👋" }],
+  "action-nap":  [{ word: "nap", emoji: "😴" }, { word: "rest", emoji: "🛌" }, { word: "yawn", emoji: "🥱" }, { word: "stretch", emoji: "🧘" }, { word: "dream", emoji: "💭" }],
 };
 
 function wordsForLesson(lesson: LessonData): { word: string; emoji: string }[] {
@@ -529,6 +534,82 @@ const LESSONS: Record<string, LessonData> = {
     buildSlots: ["A", "E", "I"], buildTiles: ["A", "E", "I", "O", "U"],
     xpReward: 75, isBoss: true,
   },
+
+  // ── Level 5: Action Words ───────────────────────────────────────────────────
+  // Verb-focused lessons. Strokes reuse first-letter shapes from earlier
+  // lessons so Trace It still works. Word pools (see WORD_POOLS) give all
+  // the verb-themed games (Flashcards, Listen Up, Photo Touch, Memory, True
+  // or False, Spelling Bee) something to draw from.
+  "action-play": {
+    id: "action-play", phoneme: "P", word: "play", wordEmoji: "🎮",
+    tipText: "Action words tell us what we DO — like \"play\"! P is for play.",
+    phonemeParts: [
+      { letters: "P", label: "The sound", highlight: true },
+      { letters: "LAY", label: "The rest", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210",
+      "M 80 50 Q 260 50 260 120 Q 260 190 80 190",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(play|plays|playing|paint|push|pull|plant)\b/i,
+    buildSlots: ["P", "L", "A", "Y"], buildTiles: ["P", "L", "A", "Y", "S", "R"],
+    xpReward: 20,
+  },
+  "action-eat": {
+    id: "action-eat", phoneme: "E", word: "eat", wordEmoji: "🍽️",
+    tipText: "Eat is something we ALL do! E says \"ehh\" — like \"eat\".",
+    phonemeParts: [
+      { letters: "E", label: "Short E", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "T", label: "The end", highlight: false },
+    ],
+    traceStrokes: ["M 80 60 L 80 200", "M 80 60 L 260 60", "M 80 130 L 220 130", "M 80 200 L 260 200"],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(eat|eats|eating|drink|chew|sip|snack)\b/i,
+    buildSlots: ["E", "A", "T"], buildTiles: ["E", "A", "T", "S", "M", "P"],
+    xpReward: 20,
+  },
+  "action-sing": {
+    id: "action-sing", phoneme: "S", word: "sing", wordEmoji: "🎤",
+    tipText: "Sing makes music! S says \"sss\" — start with that snake sound.",
+    phonemeParts: [
+      { letters: "S", label: "The sound", highlight: true },
+      { letters: "I", label: "Short I", highlight: false },
+      { letters: "NG", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 270 75 Q 180 50 130 100 Q 90 140 180 165 Q 240 185 270 160",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(sing|sings|singing|shout|smile|talk|wave|say)\b/i,
+    buildSlots: ["S", "I", "N", "G"], buildTiles: ["S", "I", "N", "G", "A", "T"],
+    xpReward: 20,
+  },
+  "action-nap": {
+    id: "action-nap", phoneme: "N", word: "nap", wordEmoji: "😴",
+    tipText: "A nap is a short sleep. N says \"nnn\" — feel the buzz in your nose.",
+    phonemeParts: [
+      { letters: "N", label: "The sound", highlight: true },
+      { letters: "A", label: "Short A", highlight: false },
+      { letters: "P", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 50 L 80 210", "M 80 50 L 280 210", "M 280 50 L 280 210",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(nap|naps|napping|rest|yawn|stretch|dream|sleep)\b/i,
+    buildSlots: ["N", "A", "P"], buildTiles: ["N", "A", "P", "S", "T", "M"],
+    xpReward: 20,
+  },
+  "action-boss": {
+    id: "action-boss", phoneme: "Action!", word: "verbs", wordEmoji: "🏆",
+    tipText: "You learned tons of action words — keep doing, reading, and growing!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["P", "L", "A", "Y"], buildTiles: ["P", "L", "A", "Y", "E", "T"],
+    xpReward: 100, isBoss: true,
+  },
 };
 
 const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x: number }[] = [
@@ -557,6 +638,12 @@ const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x
   { id: "long-i",      label: "Long I",     sub: "night, light, right",boss: false, x: 140 },
   { id: "long-o",      label: "Long O",     sub: "boat, road, coat",   boss: false, x: 60 },
   { id: "vowel-boss-2",label: "Vowel Master!",sub: "All vowels!",      boss: true,  x: 195 },
+  // Level 5 — Action Words (verbs in context, inspired by the AAC "Action Words" set)
+  { id: "action-play", label: "Play",          sub: "play, push, paint",  boss: false, x: 80 },
+  { id: "action-eat",  label: "Eat",           sub: "eat, drink, chew",   boss: false, x: 240 },
+  { id: "action-sing", label: "Sing",          sub: "sing, say, shout",   boss: false, x: 140 },
+  { id: "action-nap",  label: "Nap",           sub: "nap, rest, yawn",    boss: false, x: 60 },
+  { id: "action-boss", label: "Action Hero!",  sub: "All action words!",  boss: true,  x: 195 },
 ];
 
 // ─── Lexi mascot (lavender, star wand) ───────────────────────────────────────
@@ -3510,6 +3597,324 @@ function MemoryCardsGame({ lesson, onFinish, onCorrect, onWrong }: {
   );
 }
 
+// ─── Mini-Game: True or False ────────────────────────────────────────────────
+// Show a big emoji + a word label. Half the time the word matches the emoji;
+// half the time it's the wrong word from another pool. Kid taps ✓ or ✗.
+// 4 rounds. Track first-tap accuracy.
+function TrueOrFalseGame({ lesson, onFinish, onCorrect, onWrong }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const ROUNDS = 4;
+
+  const rounds = useMemo(() => {
+    const pool = wordsForLesson(lesson);
+    const targets = shuffleAndSlice(pool, ROUNDS);
+    return targets.map((target, i) => {
+      // Alternate: half true, half false, but randomize order
+      const shouldBeTrue = ((i + Math.floor(Math.random() * 2)) % 2) === 0;
+      if (shouldBeTrue) {
+        return { emoji: target.emoji, label: target.word, isTrue: true };
+      }
+      // false: show this emoji but with a wrong word label from another pool
+      const wrong = pickDistractorWords(lesson.id, target.word, 1)[0];
+      return { emoji: target.emoji, label: wrong?.word ?? target.word, isTrue: false };
+    });
+  }, [lesson]);
+
+  const [round, setRound] = useState(0);
+  const [picked, setPicked] = useState<"true" | "false" | null>(null);
+  const [locked, setLocked] = useState(false);
+  const current = rounds[round];
+
+  useEffect(() => {
+    if (!current) return;
+    setPicked(null); setLocked(false);
+    cancelTTS();
+    // Auto-play the LABEL (what the screen claims it is)
+    const t = setTimeout(() => void playTTS(current.label, { rate: 0.9 }), 280);
+    return () => { clearTimeout(t); cancelTTS(); };
+  }, [round, current]);
+
+  const replay = () => { if (current) void playTTS(current.label, { rate: 0.85 }); };
+
+  const onChoose = (choice: "true" | "false") => {
+    if (locked) return;
+    setLocked(true);
+    setPicked(choice);
+    const isRight = (choice === "true") === current.isTrue;
+    if (isRight) onCorrect?.(); else onWrong?.();
+    setTimeout(() => {
+      if (round + 1 >= ROUNDS) onFinish();
+      else setRound(r => r + 1);
+    }, 950);
+  };
+
+  if (!current) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Progress dots */}
+      <div className="flex gap-2 mb-2">
+        {rounds.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === round ? 24 : 8, height: 8, borderRadius: 4,
+              background: i <= round ? "#5DCAA5" : C.primarySoft,
+              transition: "all 0.3s",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* The card under test */}
+      <div className="flex flex-col items-center gap-3">
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+          Is this true?
+        </div>
+        <motion.div
+          key={round}
+          initial={{ scale: 0.85, opacity: 0, y: 14 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          transition={{ type: "spring", bounce: 0.4 }}
+          style={{
+            width: 240, padding: "26px 18px",
+            background: `linear-gradient(135deg, ${C.white}, ${C.primarySoft})`,
+            borderRadius: 24,
+            border: `3px solid ${C.primarySoft}`,
+            boxShadow: "0 14px 36px rgba(108,71,255,0.18)",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+          }}
+        >
+          <div style={{ fontSize: 90, lineHeight: 1 }}>{current.emoji}</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: C.ink, letterSpacing: 1, fontFamily: dyslexicFont }}>
+            {current.label}
+          </div>
+        </motion.div>
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={replay}
+          style={{
+            padding: "8px 16px", borderRadius: 20, border: "none",
+            background: C.primarySoft, color: C.primary,
+            display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
+            fontSize: 13, fontWeight: 800,
+          }}
+        >
+          <Volume2 size={14} /> Hear word
+        </motion.button>
+      </div>
+
+      {/* True / False buttons */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, width: "100%" }}>
+        {(["true", "false"] as const).map(choice => {
+          const isPicked = picked === choice;
+          const wasRight = picked !== null && ((picked === "true") === current.isTrue);
+          const showResult = isPicked && (wasRight ? "right" : "wrong");
+          const baseColor = choice === "true" ? "#5DCAA5" : "#E08080";
+          return (
+            <motion.button
+              key={choice}
+              whileTap={{ scale: locked ? 1 : 0.94 }}
+              animate={showResult === "wrong" ? { x: [0, -6, 6, -6, 6, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              onClick={() => onChoose(choice)}
+              disabled={locked}
+              style={{
+                padding: "20px 8px",
+                borderRadius: 22, border: "none",
+                background: showResult === "right" ? baseColor
+                          : showResult === "wrong" ? "#E08080"
+                          : choice === "true" ? `linear-gradient(135deg, #5DCAA5, #3DB88A)`
+                                              : `linear-gradient(135deg, #F88282, #D85555)`,
+                color: "white",
+                cursor: locked ? "default" : "pointer",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                fontFamily: uiFont,
+                boxShadow: `0 8px 22px ${choice === "true" ? "rgba(93,202,165,0.4)" : "rgba(232,128,128,0.4)"}`,
+              }}
+            >
+              <div style={{ fontSize: 36, lineHeight: 1 }}>{choice === "true" ? "✓" : "✗"}</div>
+              <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: 1 }}>
+                {choice === "true" ? "TRUE" : "FALSE"}
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        Round {round + 1} of {ROUNDS}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mini-Game: Spelling Bee ─────────────────────────────────────────────────
+// Hear a word, tap the right letters in order to spell it. Wrong letters
+// shake and don't fill the slot. 3 rounds.
+function SpellingBeeGame({ lesson, onFinish, onCorrect, onWrong }: {
+  lesson: LessonData;
+  onFinish: () => void;
+  onCorrect?: () => void;
+  onWrong?: () => void;
+}) {
+  const ROUNDS = 3;
+
+  const rounds = useMemo(() => {
+    const pool = wordsForLesson(lesson);
+    const targets = shuffleAndSlice(pool, ROUNDS);
+    return targets.map((target) => {
+      const letters = target.word.toLowerCase().split("");
+      // Tile bank: unique letters from the word + 2 distractors, shuffled
+      const unique = Array.from(new Set(letters));
+      const distractors = pickDistractorLetters(letters[0], 2).map(d => d[0]);
+      const bank = [...unique, ...distractors].sort(() => Math.random() - 0.5);
+      return { target, letters, bank };
+    });
+  }, [lesson]);
+
+  const [round, setRound] = useState(0);
+  const [pos, setPos] = useState(0);
+  const [shake, setShake] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
+  const current = rounds[round];
+
+  useEffect(() => {
+    if (!current) return;
+    setPos(0); setShake(false); setAdvancing(false);
+    cancelTTS();
+    const t = setTimeout(() => void playTTS(current.target.word, { rate: 0.85 }), 280);
+    return () => { clearTimeout(t); cancelTTS(); };
+  }, [round, current]);
+
+  const replay = () => { if (current) void playTTS(current.target.word, { rate: 0.8 }); };
+
+  const tryLetter = (letter: string) => {
+    if (advancing) return;
+    const expected = current.letters[pos];
+    if (letter.toLowerCase() === expected) {
+      onCorrect?.();
+      const nextPos = pos + 1;
+      setPos(nextPos);
+      if (nextPos >= current.letters.length) {
+        // Word complete!
+        setAdvancing(true);
+        setTimeout(() => void playTTS(current.target.word, { rate: 0.9 }), 200);
+        setTimeout(() => {
+          if (round + 1 >= ROUNDS) onFinish();
+          else setRound(r => r + 1);
+        }, 1500);
+      }
+    } else {
+      onWrong?.();
+      setShake(true);
+      setTimeout(() => setShake(false), 400);
+    }
+  };
+
+  if (!current) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-between h-full px-6 pb-8 pt-2" style={{ fontFamily: uiFont }}>
+      {/* Progress dots */}
+      <div className="flex gap-2 mb-2">
+        {rounds.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === round ? 24 : 8, height: 8, borderRadius: 4,
+              background: i <= round ? C.amber : C.primarySoft,
+              transition: "all 0.3s",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Emoji hint + speaker */}
+      <div className="flex flex-col items-center gap-3">
+        <div style={{ fontSize: 70, lineHeight: 1 }}>{current.target.emoji}</div>
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={replay}
+          style={{
+            padding: "10px 20px", borderRadius: 24, border: "none",
+            background: `linear-gradient(135deg, ${C.amber}, #E8772E)`,
+            color: "white", cursor: "pointer",
+            display: "inline-flex", alignItems: "center", gap: 8,
+            fontWeight: 800, fontSize: 14,
+            boxShadow: `0 8px 22px rgba(244,162,97,0.4)`,
+          }}
+        >
+          <Volume2 size={18} /> Hear it again
+        </motion.button>
+      </div>
+
+      {/* Letter slots */}
+      <motion.div
+        animate={shake ? { x: [0, -8, 8, -8, 8, 0] } : {}}
+        transition={{ duration: 0.4 }}
+        style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}
+      >
+        {current.letters.map((letter, i) => {
+          const filled = i < pos;
+          return (
+            <div
+              key={i}
+              style={{
+                minWidth: 38, height: 50,
+                padding: "0 6px",
+                borderRadius: 10,
+                background: filled ? C.tealSoft : C.white,
+                border: `3px solid ${i === pos ? C.amber : filled ? C.teal : C.primarySoft}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 26, fontWeight: 900,
+                color: filled ? C.teal : C.muted,
+                fontFamily: dyslexicFont,
+                textTransform: "uppercase",
+                transition: "all 0.2s",
+              }}
+            >
+              {filled ? letter.toUpperCase() : ""}
+            </div>
+          );
+        })}
+      </motion.div>
+
+      {/* Letter tile bank */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, width: "100%" }}>
+        {current.bank.map((letter, i) => (
+          <motion.button
+            key={`${letter}-${i}`}
+            whileTap={{ scale: advancing ? 1 : 0.92 }}
+            onClick={() => tryLetter(letter)}
+            disabled={advancing}
+            style={{
+              padding: "16px 4px",
+              borderRadius: 14, border: "none",
+              background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+              color: "white",
+              fontSize: 24, fontWeight: 900,
+              fontFamily: dyslexicFont, textTransform: "uppercase",
+              cursor: advancing ? "default" : "pointer",
+              boxShadow: `0 6px 16px rgba(108,71,255,0.3)`,
+            }}
+          >
+            {letter}
+          </motion.button>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+        Round {round + 1} of {ROUNDS}
+      </div>
+    </div>
+  );
+}
+
 // ─── Games Grid Screen ────────────────────────────────────────────────────────
 // Kid-facing "pick a game" surface for a single lesson. Every tile teaches the
 // same target phoneme (the lesson's phoneme). Two tiles are wired to real
@@ -3520,7 +3925,7 @@ function MemoryCardsGame({ lesson, onFinish, onCorrect, onWrong }: {
 //   "grid"    → tile grid + Finish Lesson CTA
 //   "playing" → renders a single game with a back chevron
 //   "win"     → existing WinScreen + LessonUnlockOverlay flow
-type GameKey = "trace" | "build" | "flashcards" | "listen-up" | "fill-blank" | "photo-touch" | "sound-match" | "memory" | "word-sort" | "unscramble";
+type GameKey = "trace" | "build" | "flashcards" | "listen-up" | "fill-blank" | "photo-touch" | "sound-match" | "memory" | "true-false" | "spelling-bee" | "word-sort" | "unscramble";
 
 type GameTile = {
   key: GameKey;
@@ -3575,19 +3980,20 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
   }, [recordMiss]);
 
   // Tile catalog — order matters for the 2-column grid layout.
-  // Active games show in color; "coming" tiles wiggle when tapped to signal
-  // they're on the roadmap (Phase 5).
+  // 10 active games + 2 placeholders (Word Sort, Unscramble = next slice).
   const tiles: GameTile[] = [
-    { key: "trace",       title: "Trace It",       subtitle: "Write the letter",  emoji: "✍️", gradient: [C.glow,    C.glowDark],      status: "active" },
-    { key: "build",       title: "Word Builder",   subtitle: "Build the word",    emoji: "🧱", gradient: [C.amber,   "#E8772E"],       status: "active" },
-    { key: "flashcards",  title: "Flashcards",     subtitle: "See & say",         emoji: "🃏", gradient: ["#FFD166", "#F4A261"],       status: "active" },
-    { key: "listen-up",   title: "Listen Up",      subtitle: "Hear & pick",       emoji: "👂", gradient: [C.primary, C.primaryDark],   status: "active" },
-    { key: "fill-blank",  title: "Fill the Blank", subtitle: "Missing letter",    emoji: "🧩", gradient: [C.blush,   "#E8729B"],       status: "active" },
-    { key: "photo-touch", title: "Photo Touch",    subtitle: "Tap the picture",   emoji: "📸", gradient: [C.teal,    C.echoDark],      status: "active" },
-    { key: "sound-match", title: "Sound Match",    subtitle: "Find the sound",    emoji: "🔊", gradient: [C.amber,   "#D17A1E"],       status: "active" },
-    { key: "memory",      title: "Memory Cards",   subtitle: "Match the pairs",   emoji: "🧠", gradient: ["#C4B0FF", C.primary],       status: "active" },
-    { key: "word-sort",   title: "Word Sort",      subtitle: "Sort the sounds",   emoji: "🗂️", gradient: [C.sky,     "#5092C7"],       status: "coming" },
-    { key: "unscramble",  title: "Unscramble",     subtitle: "Fix the word",      emoji: "🔀", gradient: ["#A89BFF", "#7C6FE0"],       status: "coming" },
+    { key: "trace",        title: "Trace It",       subtitle: "Write the letter",  emoji: "✍️", gradient: [C.glow,    C.glowDark],      status: "active" },
+    { key: "build",        title: "Word Builder",   subtitle: "Build the word",    emoji: "🧱", gradient: [C.amber,   "#E8772E"],       status: "active" },
+    { key: "flashcards",   title: "Flashcards",     subtitle: "See & say",         emoji: "🃏", gradient: ["#FFD166", "#F4A261"],       status: "active" },
+    { key: "listen-up",    title: "Listen Up",      subtitle: "Hear & pick",       emoji: "👂", gradient: [C.primary, C.primaryDark],   status: "active" },
+    { key: "fill-blank",   title: "Fill the Blank", subtitle: "Missing letter",    emoji: "🧩", gradient: [C.blush,   "#E8729B"],       status: "active" },
+    { key: "photo-touch",  title: "Photo Touch",    subtitle: "Tap the picture",   emoji: "📸", gradient: [C.teal,    C.echoDark],      status: "active" },
+    { key: "sound-match",  title: "Sound Match",    subtitle: "Find the sound",    emoji: "🔊", gradient: [C.amber,   "#D17A1E"],       status: "active" },
+    { key: "memory",       title: "Memory Cards",   subtitle: "Match the pairs",   emoji: "🧠", gradient: ["#C4B0FF", C.primary],       status: "active" },
+    { key: "true-false",   title: "True or False",  subtitle: "Real or wrong?",    emoji: "✅", gradient: ["#5DCAA5", "#3DB88A"],       status: "active" },
+    { key: "spelling-bee", title: "Spelling Bee",   subtitle: "Spell the word",    emoji: "🐝", gradient: ["#F4A261", "#D17A1E"],       status: "active" },
+    { key: "word-sort",    title: "Word Sort",      subtitle: "Sort the sounds",   emoji: "🗂️", gradient: [C.sky,     "#5092C7"],       status: "coming" },
+    { key: "unscramble",   title: "Unscramble",     subtitle: "Fix the word",      emoji: "🔀", gradient: ["#A89BFF", "#7C6FE0"],       status: "coming" },
   ];
 
   const playableCount = tiles.filter(t => t.status === "active").length;
@@ -3700,6 +4106,12 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
           )}
           {activeGame === "memory" && (
             <MemoryCardsGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
+          )}
+          {activeGame === "true-false" && (
+            <TrueOrFalseGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
+          )}
+          {activeGame === "spelling-bee" && (
+            <SpellingBeeGame lesson={lesson} onFinish={finishGame} onCorrect={onCorrect} onWrong={onWrong} />
           )}
         </div>
       </div>
@@ -4458,9 +4870,11 @@ function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onO
           { key: "flashcards",  label: "Flashcards",     emoji: "🃏", color: C.glow },
           { key: "listen-up",   label: "Listen Up",      emoji: "👂", color: C.primary },
           { key: "fill-blank",  label: "Fill the Blank", emoji: "🧩", color: C.blush },
-          { key: "photo-touch", label: "Photo Touch",    emoji: "📸", color: C.teal },
-          { key: "sound-match", label: "Sound Match",    emoji: "🔊", color: C.amber },
-          { key: "memory",      label: "Memory Cards",   emoji: "🧠", color: C.primary },
+          { key: "photo-touch",  label: "Photo Touch",   emoji: "📸", color: C.teal },
+          { key: "sound-match",  label: "Sound Match",   emoji: "🔊", color: C.amber },
+          { key: "memory",       label: "Memory Cards",  emoji: "🧠", color: C.primary },
+          { key: "true-false",   label: "True or False", emoji: "✅", color: C.teal },
+          { key: "spelling-bee", label: "Spelling Bee",  emoji: "🐝", color: C.amber },
         ];
         const fmtTime = (ms: number) => {
           if (ms <= 0) return "—";
