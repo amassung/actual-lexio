@@ -646,6 +646,62 @@ const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x
   { id: "action-boss", label: "Action Hero!",  sub: "All action words!",  boss: true,  x: 195 },
 ];
 
+// ─── Categories — independent learning tracks ────────────────────────────────
+// Each category is its own self-contained path. Kids pick whichever track
+// they want — no cross-category gating. Within a category, prev-must-be-done
+// gating still applies so they progress through the mini-path properly.
+type LessonCategory = {
+  id: string;
+  label: string;
+  sub: string;
+  emoji: string;
+  gradient: [string, string];
+  lessonIds: string[];   // ids match LEARN_PATH_DEF + LESSONS keys
+};
+
+const CATEGORIES: LessonCategory[] = [
+  {
+    id: "first-sounds",
+    label: "First Sounds",
+    sub: "M, S, T, A, P, N",
+    emoji: "🔤",
+    gradient: [C.primary, C.primaryDark],
+    lessonIds: ["m-sound", "s-sound", "t-sound", "short-a", "p-sound", "n-sound", "level1-boss"],
+  },
+  {
+    id: "short-vowels",
+    label: "Short Vowels",
+    sub: "A, E, I, O, U",
+    emoji: "🅰️",
+    gradient: [C.amber, "#E8772E"],
+    lessonIds: ["short-i", "short-e", "short-o", "short-u", "vowel-boss"],
+  },
+  {
+    id: "blends",
+    label: "Blends & Digraphs",
+    sub: "SH, CH, TH",
+    emoji: "🧩",
+    gradient: [C.teal, C.echoDark],
+    lessonIds: ["sh-sound", "ch-sound", "th-sound", "blend-boss"],
+  },
+  {
+    id: "long-vowels",
+    label: "Long Vowels",
+    sub: "AI, EE, IGH, OA",
+    emoji: "🌟",
+    gradient: [C.blush, "#E8729B"],
+    lessonIds: ["long-a", "long-e", "long-i", "long-o", "vowel-boss-2"],
+  },
+  {
+    id: "action-words",
+    label: "Action Words",
+    sub: "Play, Eat, Sing, Nap",
+    emoji: "🏃",
+    gradient: [C.glow, C.glowDark],
+    lessonIds: ["action-play", "action-eat", "action-sing", "action-nap", "action-boss"],
+  },
+];
+
 // ─── Lexi mascot (lavender, star wand) ───────────────────────────────────────
 // Shared pose decorations — overlay extras on top of every mascot's SVG.
 // Pass each mascot's eye coordinates so sleepy lids land in the right spot.
@@ -1416,41 +1472,217 @@ function HomeScreen({ onStartLesson, onTabChange }: {
   );
 }
 
-// ─── Learn / Path Screen ──────────────────────────────────────────────────────
+// ─── Learn Screen — category overview + per-category path ─────────────────────
+// Two views managed by internal state:
+//   activeCategoryId === null  → grid of category cards
+//   activeCategoryId === <id>  → lesson path filtered to that category
+// Categories are always unlocked (kid picks any track freely). Within a
+// category, the existing prev-must-be-done gate keeps the mini-path ordered.
 function LearnScreen({ onStartLesson }: { onStartLesson: (id: string) => void }) {
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const masteredPhonemes = useStore(s => s.masteredPhonemes);
+  const activeCategory = activeCategoryId
+    ? CATEGORIES.find(c => c.id === activeCategoryId) ?? null
+    : null;
 
-  const learnPath = LEARN_PATH_DEF.map((def, i) => {
-    const done = masteredPhonemes.includes(def.id);
-    const prevDone = i === 0 || masteredPhonemes.includes(LEARN_PATH_DEF[i - 1].id);
-    const locked = !done && !prevDone;
-    const current = !done && prevDone;
-    return { ...def, done, locked, current };
-  });
+  if (!activeCategory) {
+    return (
+      <CategoryOverview
+        mastered={masteredPhonemes}
+        onPickCategory={(id) => setActiveCategoryId(id)}
+      />
+    );
+  }
+  return (
+    <CategoryPath
+      category={activeCategory}
+      mastered={masteredPhonemes}
+      onBack={() => setActiveCategoryId(null)}
+      onStartLesson={onStartLesson}
+    />
+  );
+}
 
-  const doneCount = learnPath.filter(n => n.done).length;
-  const chapterIdx = Math.floor(doneCount / 4);
-  const chapterNames = ["Level 1: First Sounds (M, S, T, A, P, N)", "Level 2: Short Vowels", "Level 3: Blends & Digraphs", "Level 4: Long Vowels"];
-  const chapterName = chapterNames[Math.min(chapterIdx, chapterNames.length - 1)];
-
+// ─── Categories overview ──────────────────────────────────────────────────────
+function CategoryOverview({ mastered, onPickCategory }: {
+  mastered: string[];
+  onPickCategory: (id: string) => void;
+}) {
+  const totalDone = mastered.length;
   return (
     <div className="flex flex-col h-full" style={{ fontFamily: uiFont, background: C.bg }}>
       <div className="px-6 pt-14 pb-4">
-        <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Learning Path</div>
-        <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>{chapterName}</div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Learning Tracks</div>
+        <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>
+          Pick any track — jump in wherever you want!
+        </div>
         <div className="flex gap-3 mt-4">
-          {[
-            { label: `${doneCount} done`, color: C.teal },
-            { label: `Chapter ${chapterIdx + 1}`, color: C.primary },
-            { label: `Level ${doneCount + 1}`, color: C.amber },
-          ].map(b => (
-            <div key={b.label} style={{
-              padding: "6px 14px", borderRadius: 20,
-              background: b.color + "20", color: b.color, fontSize: 12, fontWeight: 600
-            }}>{b.label}</div>
-          ))}
+          <div style={{
+            padding: "6px 14px", borderRadius: 20,
+            background: C.teal + "20", color: C.teal, fontSize: 12, fontWeight: 600,
+          }}>
+            {totalDone} lessons done
+          </div>
+          <div style={{
+            padding: "6px 14px", borderRadius: 20,
+            background: C.primary + "20", color: C.primary, fontSize: 12, fontWeight: 600,
+          }}>
+            {CATEGORIES.length} tracks
+          </div>
         </div>
       </div>
+
+      <div className="flex-1 overflow-y-auto px-5 pb-8">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          {CATEGORIES.map((cat, i) => {
+            const total = cat.lessonIds.length;
+            const done = cat.lessonIds.filter(id => mastered.includes(id)).length;
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            const isDone = done === total;
+            return (
+              <motion.button
+                key={cat.id}
+                initial={{ scale: 0.85, opacity: 0, y: 12 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05, type: "spring", bounce: 0.4 }}
+                whileTap={{ scale: 0.94 }}
+                onClick={() => onPickCategory(cat.id)}
+                style={{
+                  position: "relative",
+                  border: "none", cursor: "pointer",
+                  background: `linear-gradient(135deg, ${cat.gradient[0]}, ${cat.gradient[1]})`,
+                  borderRadius: 22,
+                  padding: "18px 14px 14px",
+                  textAlign: "left",
+                  color: "white",
+                  display: "flex", flexDirection: "column", gap: 8,
+                  aspectRatio: "1 / 1.05",
+                  boxShadow: `0 10px 24px ${cat.gradient[1]}55`,
+                  overflow: "hidden",
+                  fontFamily: uiFont,
+                }}
+              >
+                {/* decorative blob */}
+                <div style={{
+                  position: "absolute", top: -30, right: -30,
+                  width: 100, height: 100, borderRadius: 50,
+                  background: "rgba(255,255,255,0.18)",
+                }} />
+                {isDone && (
+                  <div style={{
+                    position: "absolute", top: 10, right: 10,
+                    width: 26, height: 26, borderRadius: 13,
+                    background: "white",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                  }}>
+                    <Trophy size={14} color={cat.gradient[1]} />
+                  </div>
+                )}
+                <div style={{ fontSize: 38, lineHeight: 1, marginTop: 6 }}>{cat.emoji}</div>
+                <div style={{ marginTop: "auto" }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.15 }}>{cat.label}</div>
+                  <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2, fontWeight: 600 }}>{cat.sub}</div>
+                  {/* Progress bar */}
+                  <div style={{
+                    marginTop: 8,
+                    height: 6, borderRadius: 3,
+                    background: "rgba(255,255,255,0.25)",
+                    overflow: "hidden",
+                  }}>
+                    <div style={{
+                      width: `${pct}%`,
+                      height: "100%",
+                      background: "rgba(255,255,255,0.85)",
+                      transition: "width 0.4s",
+                    }} />
+                  </div>
+                  <div style={{ fontSize: 10, opacity: 0.85, marginTop: 4, fontWeight: 700 }}>
+                    {done}/{total} done
+                  </div>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+
+        <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 22, lineHeight: 1.6 }}>
+          Each track is independent. Switch anytime!
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Per-category lesson path (uses LEARN_PATH_DEF layout, filtered) ──────────
+function CategoryPath({ category, mastered, onBack, onStartLesson }: {
+  category: LessonCategory;
+  mastered: string[];
+  onBack: () => void;
+  onStartLesson: (id: string) => void;
+}) {
+  // Build the filtered path: LEARN_PATH_DEF entries that belong to this category
+  const learnPath = category.lessonIds
+    .map(id => LEARN_PATH_DEF.find(d => d.id === id))
+    .filter((d): d is typeof LEARN_PATH_DEF[number] => !!d)
+    .map((def, i, arr) => {
+      const done = mastered.includes(def.id);
+      const prevDone = i === 0 || mastered.includes(arr[i - 1].id);
+      const locked = !done && !prevDone;
+      const current = !done && prevDone;
+      return { ...def, done, locked, current };
+    });
+
+  const doneCount = learnPath.filter(n => n.done).length;
+
+  return (
+    <div className="flex flex-col h-full" style={{ fontFamily: uiFont, background: C.bg }}>
+      <div className="px-5 pt-12 pb-4 flex items-center gap-3">
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={onBack}
+          style={{
+            width: 44, height: 44, borderRadius: 22,
+            background: C.white,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "none", cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(108,71,255,0.15)",
+          }}
+          aria-label="Back to tracks"
+        >
+          <ChevronLeft size={22} color={C.primary} />
+        </motion.button>
+        <div className="flex-1">
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+            Track
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, lineHeight: 1.1 }}>
+            {category.label}
+          </div>
+        </div>
+        {/* Category emoji badge */}
+        <div style={{
+          width: 52, height: 52, borderRadius: 18,
+          background: `linear-gradient(135deg, ${category.gradient[0]}, ${category.gradient[1]})`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 26,
+          boxShadow: `0 6px 18px ${category.gradient[1]}55`,
+        }}>
+          {category.emoji}
+        </div>
+      </div>
+
+      <div className="px-5 pb-3">
+        <div style={{
+          padding: "6px 14px", borderRadius: 20,
+          background: doneCount === learnPath.length ? C.tealSoft : C.primarySoft,
+          color: doneCount === learnPath.length ? C.teal : C.primary,
+          fontSize: 12, fontWeight: 700, display: "inline-block",
+        }}>
+          {doneCount}/{learnPath.length} lessons
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-2 pb-8">
         <div style={{ position: "relative", minHeight: learnPath.length * 88 + 80 }}>
           <svg
@@ -1487,7 +1719,7 @@ function LearnScreen({ onStartLesson }: { onStartLesson: (id: string) => void })
             >
               <motion.button
                 whileTap={!node.locked ? { scale: 0.9 } : {}}
-                onClick={!node.locked && !node.done ? () => onStartLesson(node.id) : node.done ? () => onStartLesson(node.id) : undefined}
+                onClick={!node.locked ? () => onStartLesson(node.id) : undefined}
                 style={{
                   width: node.boss ? 72 : 56,
                   height: node.boss ? 72 : 56,
@@ -1495,11 +1727,11 @@ function LearnScreen({ onStartLesson }: { onStartLesson: (id: string) => void })
                   background: node.done
                     ? `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`
                     : node.current
-                      ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`
+                      ? `linear-gradient(135deg, ${category.gradient[0]}, ${category.gradient[1]})`
                       : node.locked ? "#E8E5F0" : C.primarySoft,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   boxShadow: node.current
-                    ? `0 8px 24px rgba(108,71,255,0.4)`
+                    ? `0 8px 24px ${category.gradient[1]}66`
                     : node.boss && node.done ? `0 6px 18px rgba(93,202,165,0.4)` : "none",
                   border: node.current ? `3px solid white` : "none",
                   cursor: node.locked ? "default" : "pointer",
@@ -1514,12 +1746,12 @@ function LearnScreen({ onStartLesson }: { onStartLesson: (id: string) => void })
               </motion.button>
               <div style={{
                 fontSize: 11, fontWeight: 700,
-                color: node.locked ? C.muted : node.current ? C.primary : C.ink,
+                color: node.locked ? C.muted : node.current ? category.gradient[0] : C.ink,
                 textAlign: "center", maxWidth: 80
               }}>{node.label}</div>
               {node.current && (
                 <div style={{
-                  background: C.primary, color: "white", fontSize: 9, fontWeight: 700,
+                  background: category.gradient[0], color: "white", fontSize: 9, fontWeight: 700,
                   padding: "2px 8px", borderRadius: 8
                 }}>NOW</div>
               )}
