@@ -178,7 +178,8 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   // ── Level 5: Action Words (verbs in context) ───────────────────────────────
   "action-play": [{ word: "play", emoji: "🎮" }, { word: "paint", emoji: "🎨" }, { word: "push", emoji: "🤚" }, { word: "pull", emoji: "💪" }, { word: "plant", emoji: "🌱" }],
   "action-eat":  [{ word: "eat", emoji: "🍽️" }, { word: "drink", emoji: "🥤" }, { word: "chew", emoji: "😋" }, { word: "sip", emoji: "🥛" }, { word: "snack", emoji: "🍪" }],
-  "action-sing": [{ word: "sing", emoji: "🎤" }, { word: "shout", emoji: "📢" }, { word: "smile", emoji: "😊" }, { word: "talk", emoji: "💬" }, { word: "wave", emoji: "👋" }],
+  // Voice/mouth actions — kept distinct from action-help (kindness actions)
+  "action-sing": [{ word: "sing", emoji: "🎤" }, { word: "shout", emoji: "📢" }, { word: "whisper", emoji: "🤫" }, { word: "talk", emoji: "💬" }, { word: "laugh", emoji: "😆" }],
   "action-nap":   [{ word: "nap", emoji: "😴" }, { word: "rest", emoji: "🛌" }, { word: "yawn", emoji: "🥱" }, { word: "stretch", emoji: "🧘" }, { word: "dream", emoji: "💭" }],
   "action-run":   [{ word: "run", emoji: "🏃" }, { word: "jog", emoji: "🚶" }, { word: "hop", emoji: "🦘" }, { word: "skip", emoji: "👯" }, { word: "race", emoji: "🏁" }],
   "action-jump":  [{ word: "jump", emoji: "🤸" }, { word: "leap", emoji: "🐸" }, { word: "fly", emoji: "🕊️" }, { word: "climb", emoji: "🧗" }, { word: "swim", emoji: "🏊" }],
@@ -198,7 +199,7 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   "sight-prim-2": [{ word: "have", emoji: "✋" }, { word: "do", emoji: "🛠️" }, { word: "did", emoji: "☑️" }, { word: "will", emoji: "🎯" }, { word: "must", emoji: "❗" }],
   "sight-prim-3": [{ word: "came", emoji: "🚶" }, { word: "went", emoji: "🏃" }, { word: "saw", emoji: "👀" }, { word: "ate", emoji: "🍽️" }, { word: "ran", emoji: "🏃" }],
   "sight-prim-4": [{ word: "this", emoji: "👇" }, { word: "that", emoji: "👈" }, { word: "there", emoji: "📍" }, { word: "what", emoji: "❓" }, { word: "who", emoji: "🤔" }],
-  "sight-prim-5": [{ word: "new", emoji: "✨" }, { word: "black", emoji: "⚫" }, { word: "brown", emoji: "🟫" }, { word: "white", emoji: "⚪" }, { word: "pretty", emoji: "🌸" }],
+  "sight-prim-5": [{ word: "new", emoji: "✨" }, { word: "black", emoji: "⚫" }, { word: "brown", emoji: "🟤" }, { word: "white", emoji: "⚪" }, { word: "pretty", emoji: "🌸" }],
   "sight-prim-6": [{ word: "like", emoji: "❤️" }, { word: "want", emoji: "🙏" }, { word: "good", emoji: "👍" }, { word: "please", emoji: "🥺" }, { word: "yes", emoji: "✅" }],
   // ── Magic E (CVCe) ─────────────────────────────────────────────────────────
   "cvce-a": [{ word: "cake", emoji: "🎂" }, { word: "bake", emoji: "🍞" }, { word: "snake", emoji: "🐍" }, { word: "game", emoji: "🎲" }, { word: "plate", emoji: "🍽️" }],
@@ -207,9 +208,9 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   "cvce-u": [{ word: "cube", emoji: "🧊" }, { word: "tube", emoji: "🧪" }, { word: "flute", emoji: "🎶" }, { word: "mule", emoji: "🫏" }, { word: "prune", emoji: "🍇" }],
   // ── Sight Words (Dolch 1st Grade) ──────────────────────────────────────────
   "sight-1st-1": [{ word: "her", emoji: "👩" }, { word: "him", emoji: "👨" }, { word: "his", emoji: "👦" }, { word: "them", emoji: "👬" }, { word: "then", emoji: "⏭️" }],
-  "sight-1st-2": [{ word: "had", emoji: "📚" }, { word: "has", emoji: "🎒" }, { word: "were", emoji: "⏪" }, { word: "going", emoji: "🚶" }, { word: "of", emoji: "🔗" }],
+  "sight-1st-2": [{ word: "had", emoji: "📚" }, { word: "has", emoji: "🎒" }, { word: "were", emoji: "⏪" }, { word: "going", emoji: "🚙" }, { word: "of", emoji: "🧩" }],
   "sight-1st-3": [{ word: "ask", emoji: "🤔" }, { word: "know", emoji: "💡" }, { word: "think", emoji: "🧠" }, { word: "may", emoji: "🤷" }, { word: "could", emoji: "✨" }],
-  "sight-1st-4": [{ word: "take", emoji: "🤲" }, { word: "give", emoji: "🎁" }, { word: "walk", emoji: "🚶" }, { word: "stop", emoji: "🛑" }, { word: "put", emoji: "📦" }],
+  "sight-1st-4": [{ word: "take", emoji: "🤲" }, { word: "give", emoji: "🎁" }, { word: "walk", emoji: "🥾" }, { word: "stop", emoji: "🛑" }, { word: "put", emoji: "📦" }],
   "sight-1st-5": [{ word: "after", emoji: "⏭️" }, { word: "again", emoji: "🔁" }, { word: "every", emoji: "♾️" }, { word: "once", emoji: "1️⃣" }, { word: "just", emoji: "✨" }],
   "sight-1st-6": [{ word: "by", emoji: "📍" }, { word: "from", emoji: "📤" }, { word: "when", emoji: "⏰" }, { word: "how", emoji: "❓" }, { word: "over", emoji: "🔝" }],
   // ── Vocabulary: Animals ────────────────────────────────────────────────────
@@ -225,7 +226,9 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   // ── Vocabulary: Body ───────────────────────────────────────────────────────
   "body-face":  [{ word: "eye", emoji: "👁️" }, { word: "ear", emoji: "👂" }, { word: "nose", emoji: "👃" }, { word: "mouth", emoji: "👄" }, { word: "tooth", emoji: "🦷" }],
   "body-hands": [{ word: "hand", emoji: "✋" }, { word: "thumb", emoji: "👍" }, { word: "finger", emoji: "👆" }, { word: "arm", emoji: "💪" }, { word: "fist", emoji: "✊" }],
-  "body-legs":  [{ word: "leg", emoji: "🦵" }, { word: "foot", emoji: "🦶" }, { word: "toe", emoji: "🦶" }, { word: "knee", emoji: "🦴" }, { word: "ankle", emoji: "🦴" }],
+  // "knee" and "ankle" don't have dedicated emoji; we use the leg variant and
+  // bone respectively. Acceptable visual approximation for early readers.
+  "body-legs":  [{ word: "leg", emoji: "🦵" }, { word: "foot", emoji: "🦶" }, { word: "knee", emoji: "🦵" }, { word: "ankle", emoji: "🦶" }, { word: "shin", emoji: "🦴" }],
 };
 
 function wordsForLesson(lesson: LessonData): { word: string; emoji: string }[] {
@@ -294,20 +297,20 @@ function maskWord(word: string, phoneme: string): { masked: string; missing: str
 const LESSONS: Record<string, LessonData> = {
   // ── Level 1: Structured Literacy sequence (m, s, t, short-a, p, n) ──────────
   "m-sound": {
-    id: "m-sound", phoneme: "M", word: "mat", wordEmoji: "🟫",
+    id: "m-sound", phoneme: "M", word: "map", wordEmoji: "🗺️",
     tipText: 'M says "mmm" — hum with your lips together, like tasting something yummy!',
     phonemeParts: [
       { letters: "M", label: "The sound", highlight: true },
       { letters: "A", label: "Short A", highlight: false },
-      { letters: "T", label: "The stop", highlight: false },
+      { letters: "P", label: "The stop", highlight: false },
     ],
     traceStrokes: [
       "M 60 200 L 60 50", "M 60 50 L 180 150",
       "M 180 150 L 300 50", "M 300 50 L 300 200",
     ],
     traceViewBox: "0 0 360 240",
-    sayAccept: /\b(mat|map|man|mad|mud|mop|met|mix|mob|mug)\b/i,
-    buildSlots: ["M", "A", "T"], buildTiles: ["M", "A", "T", "S", "P", "N"],
+    sayAccept: /\b(map|mat|man|mad|mud|mop|met|mix|mob|mug)\b/i,
+    buildSlots: ["M", "A", "P"], buildTiles: ["M", "A", "P", "S", "T", "N"],
     xpReward: 15,
   },
   "s-sound": {
@@ -1312,7 +1315,7 @@ const LESSONS: Record<string, LessonData> = {
     ],
     traceStrokes: ["M 100 50 L 100 210", "M 100 210 L 260 210"],
     traceViewBox: "0 0 360 240",
-    sayAccept: /\b(leg|foot|toe|knee|ankle)\b/i,
+    sayAccept: /\b(leg|foot|knee|ankle|shin|toe)\b/i,
     buildSlots: ["L", "E", "G"], buildTiles: ["L", "E", "G", "F", "T", "K"],
     xpReward: 20,
   },
@@ -1328,7 +1331,7 @@ const LESSONS: Record<string, LessonData> = {
 
 const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x: number }[] = [
   // Level 1 — Structured Literacy sequence
-  { id: "m-sound",     label: "M Sound",    sub: "mat, man, mud",      boss: false, x: 60 },
+  { id: "m-sound",     label: "M Sound",    sub: "map, moon, mom",     boss: false, x: 60 },
   { id: "s-sound",     label: "S Sound",    sub: "sat, sit, sun",      boss: false, x: 240 },
   { id: "t-sound",     label: "T Sound",    sub: "tap, tan, tip",      boss: false, x: 140 },
   { id: "short-a",     label: "Short A",    sub: "mat, sat, tap",      boss: false, x: 60 },
@@ -2335,7 +2338,13 @@ function CategoryOverview({ mastered, onPickCategory }: {
 }) {
   const totalDone = mastered.length;
   return (
-    <div className="flex flex-col h-full" style={{ fontFamily: uiFont, background: C.bg }}>
+    <motion.div
+      className="flex flex-col h-full"
+      initial={{ x: -16, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      style={{ fontFamily: uiFont, background: C.bg }}
+    >
       <div className="px-6 pt-14 pb-4">
         <div style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>Learning Tracks</div>
         <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>
@@ -2435,7 +2444,7 @@ function CategoryOverview({ mastered, onPickCategory }: {
           Each track is independent. Switch anytime!
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -2461,7 +2470,13 @@ function CategoryPath({ category, mastered, onBack, onStartLesson }: {
   const doneCount = learnPath.filter(n => n.done).length;
 
   return (
-    <div className="flex flex-col h-full" style={{ fontFamily: uiFont, background: C.bg }}>
+    <motion.div
+      className="flex flex-col h-full"
+      initial={{ x: 24, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
+      style={{ fontFamily: uiFont, background: C.bg }}
+    >
       <div className="px-5 pt-12 pb-4 flex items-center gap-3">
         <motion.button
           whileTap={{ scale: 0.88 }}
@@ -2584,7 +2599,7 @@ function CategoryPath({ category, mastered, onBack, onStartLesson }: {
           ))}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
