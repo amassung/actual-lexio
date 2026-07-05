@@ -129,6 +129,26 @@ export function cancelTTS() {
   try {
     window.speechSynthesis?.cancel();
   } catch {}
+  setTTSStatus("idle");
+}
+
+// ─── Playback status (subscribable) ───────────────────────────────────────────
+// Simple event bus so UI can show a small loading dot / speaker pulse without
+// each caller managing its own local state.
+export type TTSStatus = "idle" | "loading" | "playing";
+let currentStatus: TTSStatus = "idle";
+const statusListeners = new Set<(s: TTSStatus) => void>();
+
+function setTTSStatus(s: TTSStatus) {
+  if (currentStatus === s) return;
+  currentStatus = s;
+  statusListeners.forEach(fn => { try { fn(s); } catch {} });
+}
+
+export function getTTSStatus(): TTSStatus { return currentStatus; }
+export function subscribeTTSStatus(fn: (s: TTSStatus) => void): () => void {
+  statusListeners.add(fn);
+  return () => statusListeners.delete(fn);
 }
 
 export async function playTTS(text: string, opts: TTSOpts = {}): Promise<void> {
@@ -148,15 +168,20 @@ export async function playTTS(text: string, opts: TTSOpts = {}): Promise<void> {
   const effectiveOpts: TTSOpts = isShortWord ? { ...opts, rate: 0.85 } : opts;
 
   // No key → use browser fallback immediately. Keeps local dev working.
-  if (!KEY) return playSpeechSynthesis(text, effectiveOpts);
+  if (!KEY) {
+    setTTSStatus("playing");
+    return playSpeechSynthesis(text, effectiveOpts).finally(() => setTTSStatus("idle"));
+  }
 
+  setTTSStatus("loading");
   let blob: Blob;
   try {
     blob = await getBlob(text, effectiveOpts);
   } catch (e) {
     // Network/CORS/4xx — fall back without throwing to caller
     if (typeof console !== "undefined") console.warn("[Lexio TTS] ElevenLabs failed, falling back:", (e as Error).message);
-    return playSpeechSynthesis(text, effectiveOpts);
+    setTTSStatus("playing");
+    return playSpeechSynthesis(text, effectiveOpts).finally(() => setTTSStatus("idle"));
   }
 
   return new Promise<void>(resolve => {
@@ -168,20 +193,24 @@ export async function playTTS(text: string, opts: TTSOpts = {}): Promise<void> {
       const cleanup = () => {
         if (url) URL.revokeObjectURL(url);
         if (currentAudio === audio) currentAudio = null;
+        setTTSStatus("idle");
         resolve();
       };
       audio.onended = cleanup;
       audio.onerror = cleanup;
+      audio.onplaying = () => setTTSStatus("playing");
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {
           // Autoplay blocked or other play() rejection — fall back to browser TTS
           cleanup();
-          playSpeechSynthesis(text, effectiveOpts).then(resolve);
+          setTTSStatus("playing");
+          playSpeechSynthesis(text, effectiveOpts).finally(() => setTTSStatus("idle")).then(resolve);
         });
       }
     } catch {
       if (url) URL.revokeObjectURL(url);
+      setTTSStatus("idle");
       resolve();
     }
   });

@@ -4,7 +4,8 @@ import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { TouchBackend } from "react-dnd-touch-backend";
 import { useStore, type LessonResult, pickWord, WORD_BANK, tierForAge } from "../store";
-import { playTTS, playSequence, cancelTTS, playPhonemeFile } from "../services/tts";
+import { playTTS, playSequence, cancelTTS, playPhonemeFile, subscribeTTSStatus, type TTSStatus } from "../services/tts";
+import { playDing, playAww, playFanfare } from "../services/sfx";
 import { TraceLetter } from "../components/TraceLetter";
 
 const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || (navigator as any).maxTouchPoints > 0);
@@ -2118,11 +2119,28 @@ function OnboardingFlow({ onDone }: { onDone: () => void }) {
 
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 function HomeScreen({ onStartLesson, onTabChange }: {
-  onStartLesson: () => void; onTabChange: (t: Tab) => void;
+  onStartLesson: (id?: string) => void; onTabChange: (t: Tab) => void;
 }) {
   const name = useStore(s => s.name) || "friend";
   const streak = useStore(s => s.streak);
   const masteredPhonemes = useStore(s => s.masteredPhonemes);
+  const lastLessonId = useStore(s => s.lastLessonId);
+  const lastGameKey = useStore(s => s.lastGameKey);
+  const lastLesson = lastLessonId ? LESSONS[lastLessonId] : null;
+  // Human-readable game names for the Continue card
+  const GAME_LABELS: Record<string, { title: string; emoji: string }> = {
+    "trace":         { title: "Trace It",       emoji: "✍️" },
+    "build":         { title: "Word Builder",   emoji: "🧱" },
+    "flashcards":    { title: "Flashcards",     emoji: "🃏" },
+    "listen-up":     { title: "Listen Up",      emoji: "👂" },
+    "fill-blank":    { title: "Fill the Blank", emoji: "🧩" },
+    "photo-touch":   { title: "Photo Touch",    emoji: "📸" },
+    "sound-match":   { title: "Sound Match",    emoji: "🔊" },
+    "memory":        { title: "Memory Cards",   emoji: "🧠" },
+    "true-false":    { title: "True or False",  emoji: "✅" },
+    "spelling-bee":  { title: "Spelling Bee",   emoji: "🐝" },
+    "whats-action":  { title: "What's Happening?", emoji: "🎬" },
+  };
 
   // Find the current active lesson for dynamic Word of the Day
   const currentLessonDef = LEARN_PATH_DEF.find((def, i) => {
@@ -2202,6 +2220,47 @@ function HomeScreen({ onStartLesson, onTabChange }: {
           <Clock size={12} color={C.muted} /> About 10 minutes · One lesson at a time
         </div>
       </div>
+      {/* Continue where you left off — visible only if there's a recent session */}
+      {lastLesson && (
+        <div className="px-6 pb-4">
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.ink, marginBottom: 12 }}>Continue</div>
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => onStartLesson(lastLessonId ?? undefined)}
+            style={{
+              width: "100%", textAlign: "left", border: "none",
+              background: `linear-gradient(135deg, ${C.tealSoft}, ${C.primarySoft})`,
+              borderRadius: 22, padding: 18, cursor: "pointer",
+              boxShadow: `0 6px 20px rgba(93,202,165,0.25)`,
+              display: "flex", alignItems: "center", gap: 14,
+              fontFamily: uiFont,
+            }}
+          >
+            <div style={{
+              width: 56, height: 56, borderRadius: 20,
+              background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 30, boxShadow: "0 4px 12px rgba(93,202,165,0.35)",
+            }}>
+              {lastLesson.wordEmoji}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, letterSpacing: 1.5, textTransform: "uppercase" }}>
+                Pick up where you left off
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: C.ink, marginTop: 2 }}>
+                {lastLesson.phoneme} · {lastLesson.word}
+              </div>
+              {lastGameKey && GAME_LABELS[lastGameKey] && (
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                  Last played: {GAME_LABELS[lastGameKey].emoji} {GAME_LABELS[lastGameKey].title}
+                </div>
+              )}
+            </div>
+            <ChevronRight size={22} color={C.teal} />
+          </motion.button>
+        </div>
+      )}
       {/* Today's Path */}
       <div className="px-6 pb-3">
         <div style={{ fontSize: 16, fontWeight: 700, color: C.ink, marginBottom: 12 }}>Today's Path</div>
@@ -3703,29 +3762,79 @@ function WinScreen({ onDone, variant = "small", lesson, comboMax }: { onDone: ()
     if (lesson) {
       const r = completeLesson(lesson.id, lesson.xpReward);
       setResult(r);
+      // Fanfare on streak milestones (3, 7, 14, 30, 50, 100) or level up.
+      const MILESTONES = [3, 7, 14, 30, 50, 100];
+      const crossed = MILESTONES.some(m => r.oldStreak < m && r.newStreak >= m);
+      if (crossed || r.levelUp) setTimeout(() => playFanfare(), 200);
     }
     const t = setTimeout(() => setShowXP(true), 400);
     return () => clearTimeout(t);
   }, [completeLesson, lesson]);
 
-  const confettiColors = [C.primary, C.teal, C.amber, C.blush, C.yellow, C.sky, C.lexi];
-  const confettiItems = Array.from({ length: 28 }, (_, i) => ({
-    color: confettiColors[i % confettiColors.length],
-    x: Math.random() * 360 + 15,
-    delay: Math.random() * 0.5,
-    size: Math.random() * 10 + 6,
-    rotate: Math.random() * 360,
-  }));
   const xpReward = lesson?.xpReward ?? 15;
-  // Promote to level variant if the lesson triggered a real level jump
-  const effectiveVariant: WinVariant = result?.levelUp ? "level" : variant;
+
+  // ── Streak milestone detection ────────────────────────────────────────────
+  // Trigger the big streak celebration when the kid crosses a milestone this
+  // session (e.g., yesterday at 6, today hitting 7). Priority order:
+  //   level up > streak milestone > small.
+  const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
+  const oldStreak = result?.oldStreak ?? 0;
+  const newStreak = result?.newStreak ?? 0;
+  const crossedMilestone = STREAK_MILESTONES.find(
+    m => oldStreak < m && newStreak >= m,
+  ) ?? null;
+  const streakVariantTriggered = crossedMilestone !== null;
+
+  // Promote to level variant if the lesson triggered a real level jump;
+  // otherwise auto-detect streak milestone; else use whatever was passed in.
+  const effectiveVariant: WinVariant = result?.levelUp
+    ? "level"
+    : streakVariantTriggered
+      ? "streak"
+      : variant;
+
+  // Fun streak titles by milestone — the bigger the streak, the louder the win.
+  const streakTitle = crossedMilestone === 100 ? "💯 100 DAYS! 💯"
+    : crossedMilestone === 50 ? "🔥 50-Day Streak! 🔥"
+    : crossedMilestone === 30 ? "🏆 30 Days in a Row!"
+    : crossedMilestone === 14 ? "⚡ Two Weeks Strong!"
+    : crossedMilestone === 7 ? "🌟 One Week Streak!"
+    : crossedMilestone === 3 ? "✨ 3-Day Streak!"
+    : `${newStreak}-Day Streak!`;
+  const streakSub = crossedMilestone && crossedMilestone >= 30
+    ? "You're unstoppable — this is legend territory."
+    : crossedMilestone && crossedMilestone >= 7
+      ? "Amazing dedication! Reading every day is paying off."
+      : "You're on fire! Keep it going!";
+  const streakBonus = crossedMilestone === 100 ? 500
+    : crossedMilestone === 50 ? 200
+    : crossedMilestone === 30 ? 100
+    : crossedMilestone === 14 ? 60
+    : crossedMilestone === 7 ? 40
+    : crossedMilestone === 3 ? 25
+    : 30;
+
   const variantData = {
     small: { title: "Awesome!", sub: "You completed the lesson!", xp: xpReward },
-    streak: { title: `${result?.newStreak ?? 7}-Day Streak!`, sub: "You're on fire! Amazing dedication!", xp: 30 },
+    streak: { title: streakTitle, sub: streakSub, xp: streakBonus },
     level: { title: `Level ${result?.newLevel ?? 2}!`, sub: `You've mastered ${lesson?.phoneme ?? "it"}!`, xp: xpReward + 10 },
   };
   const { title, sub, xp } = variantData[effectiveVariant];
   const mascotPose = effectiveVariant === "level" ? "levelUp" : "celebrating";
+
+  // Bigger streak → more confetti + wider spread
+  const confettiColors = [C.primary, C.teal, C.amber, C.blush, C.yellow, C.sky, C.lexi];
+  const confettiCount = crossedMilestone && crossedMilestone >= 30 ? 80
+    : crossedMilestone && crossedMilestone >= 7 ? 55
+    : crossedMilestone ? 40
+    : 28;
+  const confettiItems = Array.from({ length: confettiCount }, (_, i) => ({
+    color: confettiColors[i % confettiColors.length],
+    x: Math.random() * 360 + 15,
+    delay: Math.random() * 0.7,
+    size: Math.random() * 12 + 6,
+    rotate: Math.random() * 360,
+  }));
   return (
     <div
       className="flex flex-col items-center justify-between h-full px-8 py-12"
@@ -5142,6 +5251,9 @@ type GameTile = {
 
 function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (lessonId: string) => void }) {
   const lesson = LESSONS[lessonId] ?? LESSONS["sh-sound"];
+  // Record the current lesson as "last opened" for the Home Continue card.
+  const setStore = useStore(s => s.set);
+  useEffect(() => { setStore({ lastLessonId: lessonId }); }, [lessonId, setStore]);
 
   // Local view state
   const [view, setView] = useState<"grid" | "playing" | "win">("grid");
@@ -5167,6 +5279,7 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
   const [lastResult, setLastResult] = useState<{ key: GameKey; correct: number; total: number; ms: number } | null>(null);
 
   const onCorrect = useCallback(() => {
+    playDing();
     setCombo(c => {
       const n = c + 1;
       setComboMax(m => (n > m ? n : m));
@@ -5178,6 +5291,7 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
     recordHit();
   }, [recordHit]);
   const onWrong = useCallback(() => {
+    playAww();
     setCombo(0);
     sessionTotalRef.current += 1;
     recordMiss();
@@ -5215,6 +5329,8 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
     sessionCorrectRef.current = 0;
     sessionTotalRef.current = 0;
     sessionStartRef.current = Date.now();
+    // Remember for the Home "Continue where you left off" card
+    setStore({ lastLessonId: lessonId, lastGameKey: tile.key });
     setActiveGame(tile.key);
     setView("playing");
   };
@@ -6921,6 +7037,122 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   );
 }
 
+// ─── TTS Loading Indicator ────────────────────────────────────────────────────
+// Small pulsing dot in the top-right corner while ElevenLabs generates audio.
+// Subscribes to the shared TTS status bus in services/tts.ts, so any speaker
+// button anywhere in the app gets the indicator automatically.
+function TTSIndicator() {
+  const [status, setStatus] = useState<TTSStatus>("idle");
+  useEffect(() => subscribeTTSStatus(setStatus), []);
+  if (status !== "loading") return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.6 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: "absolute", top: 42, right: 20, zIndex: 90,
+        pointerEvents: "none",
+      }}
+    >
+      <motion.div
+        animate={{ scale: [1, 1.25, 1], opacity: [0.7, 1, 0.7] }}
+        transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+        style={{
+          width: 12, height: 12, borderRadius: 6,
+          background: C.primary,
+          boxShadow: `0 0 12px ${C.primary}, 0 0 24px ${C.primary}55`,
+        }}
+      />
+    </motion.div>
+  );
+}
+
+// ─── iOS PWA Install Banner ───────────────────────────────────────────────────
+// iOS Safari doesn't fire beforeinstallprompt — instead the user must "Add to
+// Home Screen" via the share sheet. Show a subtle bottom banner explaining
+// how, only when: (a) iOS Safari, (b) not already standalone, (c) not
+// dismissed. Dismissal persists in localStorage.
+function IOSInstallBanner() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const nav = window.navigator as Navigator & { standalone?: boolean };
+    const ua = nav.userAgent || "";
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !("MSStream" in window);
+    // Safari-only (not Chrome-on-iOS "CriOS", not Edge, not in-app WebViews)
+    const isSafari = /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(ua);
+    const isStandalone = nav.standalone === true
+      || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    const dismissed = localStorage.getItem("lexio-pwa-dismissed") === "1";
+    if (isIOS && isSafari && !isStandalone && !dismissed) {
+      // Small delay so it doesn't fight with the initial page paint
+      const t = setTimeout(() => setVisible(true), 1200);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  if (!visible) return null;
+  return (
+    <motion.div
+      initial={{ y: 100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 100, opacity: 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      style={{
+        position: "fixed",
+        bottom: 16, left: 16, right: 16,
+        zIndex: 200,
+        background: "rgba(26,26,46,0.95)",
+        color: "white",
+        borderRadius: 20,
+        padding: "14px 16px",
+        display: "flex", alignItems: "center", gap: 12,
+        boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+        fontFamily: uiFont,
+        backdropFilter: "blur(10px)",
+        maxWidth: 460, marginInline: "auto",
+      }}
+    >
+      <div style={{
+        width: 44, height: 44, borderRadius: 12,
+        background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 24, fontWeight: 900, color: "white",
+        flexShrink: 0,
+      }}>
+        L
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 800 }}>Get Lexio on your home screen</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2, lineHeight: 1.4 }}>
+          Tap <strong style={{ color: "white" }}>Share</strong> ⬆︎ then <strong style={{ color: "white" }}>Add to Home Screen</strong>
+        </div>
+      </div>
+      <button
+        onClick={() => {
+          localStorage.setItem("lexio-pwa-dismissed", "1");
+          setVisible(false);
+        }}
+        style={{
+          background: "rgba(255,255,255,0.1)",
+          border: "none",
+          color: "white",
+          width: 30, height: 30, borderRadius: 15,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer",
+          fontSize: 16,
+          flexShrink: 0,
+        }}
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </motion.div>
+  );
+}
+
 // ─── Profile Picker Screen ────────────────────────────────────────────────────
 // Multi-kid households pick which child is playing. Shown:
 //   - When Profile → Switch Kid is tapped (has back button)
@@ -7222,6 +7454,8 @@ export default function App() {
           flexShrink: 0,
         }}
       >
+        {/* TTS loading indicator — subscribes to the shared status bus */}
+        <TTSIndicator />
         {/* Status bar notch */}
         <div className="lexio-phone-notch" style={{
           position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
@@ -7256,6 +7490,7 @@ export default function App() {
               allowClose={onboarded}
             />
           )}
+          <IOSInstallBanner />
         </div>
         {/* Tab bar */}
         {showTabs && (

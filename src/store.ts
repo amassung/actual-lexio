@@ -83,6 +83,9 @@ export type ProfileSnapshot = {
   difficultyLevel: 1 | 2 | 3;
   difficultyTier: DifficultyTier;
   gameStats: Record<string, GameStat>;
+  // "Continue where you left off" — updated on lesson entry and game launch.
+  lastLessonId: string | null;
+  lastGameKey: string | null;
 };
 
 type State = ProfileSnapshot & {
@@ -153,6 +156,8 @@ const emptyProfile = (): ProfileSnapshot => ({
   difficultyLevel: 2,
   difficultyTier: "developing",
   gameStats: {},
+  lastLessonId: null,
+  lastGameKey: null,
 });
 
 // Extract the profile-level fields from state (excludes actions + profiles map).
@@ -167,6 +172,7 @@ function snapshotOf(s: State): ProfileSnapshot {
     hitsInARow: s.hitsInARow, missesInARow: s.missesInARow,
     difficultyLevel: s.difficultyLevel, difficultyTier: s.difficultyTier,
     gameStats: s.gameStats,
+    lastLessonId: s.lastLessonId, lastGameKey: s.lastGameKey,
   };
 }
 
