@@ -127,7 +127,7 @@ function speakLesson(phoneme: string, word: string) {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Screen = "splash" | "onboard" | "home" | "learn" | "games" | "lesson" | "progress" | "rewards" | "profile" | "parent";
+type Screen = "splash" | "onboard" | "home" | "learn" | "games" | "lesson" | "progress" | "rewards" | "profile" | "parent" | "profile-picker";
 type LessonStep = "hear" | "see" | "trace" | "say" | "build" | "win";
 type Tab = "home" | "learn" | "progress" | "rewards" | "profile";
 type MicState = "idle" | "listening" | "processing" | "encourage";
@@ -1981,6 +1981,7 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
 
 // ─── Onboarding Flow ──────────────────────────────────────────────────────────
 function OnboardingFlow({ onDone }: { onDone: () => void }) {
+  const createProfile = useStore(s => s.createProfile);
   const [step, setStep] = useState(0);
   const storeName = useStore(s => s.name);
   const storeAge = useStore(s => s.age);
@@ -2000,12 +2001,15 @@ function OnboardingFlow({ onDone }: { onDone: () => void }) {
     // Derive the starting difficulty tier from age. The adaptive engine
     // (recordHit / recordMiss in the store) can nudge it up or down later
     // based on actual performance.
+    // Write the new kid's flat state first, then register them as a profile
+    // so multi-kid households can add / switch between children.
     setStore({
       name: name.trim(),
       age,
       difficultyTier: tierForAge(age),
       onboarded: true,
     });
+    createProfile();
     onDone();
   };
   return (
@@ -5967,7 +5971,7 @@ const bgTints = [
   { label: "Rose", value: "#FFF0F4" },
 ];
 
-function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onOpenParent: () => void }) {
+function ProfileScreen({ onRestart, onOpenParent, onOpenProfilePicker }: { onRestart: () => void; onOpenParent: () => void; onOpenProfilePicker: () => void }) {
   const name = useStore(s => s.name) || "Friend";
   const textSize = useStore(s => s.textSize);
   const selectedBg = useStore(s => s.bgTint);
@@ -6206,6 +6210,36 @@ function ProfileScreen({ onRestart, onOpenParent }: { onRestart: () => void; onO
           </div>
         </Card>
       </div>
+      {/* Switch Kid — for shared devices */}
+      <div className="px-6 pb-5">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onOpenProfilePicker}
+          style={{
+            width: "100%", textAlign: "left", border: "none",
+            background: C.primarySoft, borderRadius: 24, padding: 20, cursor: "pointer",
+            boxShadow: "0 4px 20px rgba(108, 71, 255, 0.08)",
+            fontFamily: uiFont,
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Switch Kid</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                Share the device? Pick a different profile or add one.
+              </div>
+            </div>
+            <div style={{
+              width: 44, height: 44, borderRadius: 22,
+              background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <User size={22} color="white" />
+            </div>
+          </div>
+        </motion.button>
+      </div>
+
       {/* Parent section — opens math gate */}
       <div className="px-6 pb-5">
         <motion.button
@@ -6887,12 +6921,248 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   );
 }
 
+// ─── Profile Picker Screen ────────────────────────────────────────────────────
+// Multi-kid households pick which child is playing. Shown:
+//   - When Profile → Switch Kid is tapped (has back button)
+//   - On app load if activeProfileId is null AND profiles exist (no back)
+function ProfilePickerScreen({ onDone, onAddNew, allowClose }: {
+  onDone: () => void;
+  onAddNew: () => void;
+  allowClose: boolean;
+}) {
+  const profiles = useStore(s => s.profiles);
+  const activeProfileId = useStore(s => s.activeProfileId);
+  const switchProfile = useStore(s => s.switchProfile);
+  const deleteProfile = useStore(s => s.deleteProfile);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const profileList = Object.entries(profiles).map(([id, p]) => ({ id, ...p }));
+  const mascots = [Lexi, Echo, Glow, Bubble, Brick];
+
+  const pick = (id: string) => {
+    if (id !== activeProfileId) switchProfile(id);
+    onDone();
+  };
+
+  return (
+    <motion.div
+      className="flex flex-col h-full"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      style={{ fontFamily: uiFont, background: `linear-gradient(160deg, ${C.primarySoft}, ${C.bg})` }}
+    >
+      <div className="px-6 pt-14 pb-4 flex items-center gap-3">
+        {allowClose && (
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={onDone}
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              background: C.white,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "none", cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(108,71,255,0.15)",
+            }}
+            aria-label="Close"
+          >
+            <ChevronLeft size={22} color={C.primary} />
+          </motion.button>
+        )}
+        <div className="flex-1">
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase" }}>
+            Who's playing?
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: C.ink, lineHeight: 1.1 }}>
+            Pick a kid
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 pb-6">
+        {profileList.length === 0 ? (
+          <div style={{ fontSize: 14, color: C.muted, textAlign: "center", padding: "40px 20px" }}>
+            No profiles yet. Tap the + card to add one.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {profileList.map((p, i) => {
+              const MascotComp = mascots[p.activeMascot] ?? Lexi;
+              const isActive = p.id === activeProfileId;
+              const isDeleting = confirmDeleteId === p.id;
+              return (
+                <motion.div
+                  key={p.id}
+                  initial={{ scale: 0.85, opacity: 0, y: 12 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05, type: "spring", bounce: 0.4 }}
+                  style={{ position: "relative" }}
+                >
+                  <motion.button
+                    whileTap={{ scale: 0.94 }}
+                    onClick={() => (isDeleting ? undefined : pick(p.id))}
+                    disabled={isDeleting}
+                    style={{
+                      width: "100%",
+                      background: isActive
+                        ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`
+                        : C.white,
+                      border: `3px solid ${isActive ? C.primary : C.primarySoft}`,
+                      borderRadius: 24, padding: "20px 12px 16px",
+                      cursor: isDeleting ? "default" : "pointer",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+                      color: isActive ? "white" : C.ink,
+                      fontFamily: uiFont,
+                      boxShadow: isActive
+                        ? `0 10px 26px ${C.primary}55`
+                        : "0 4px 12px rgba(0,0,0,0.06)",
+                    }}
+                  >
+                    <div style={{
+                      width: 72, height: 72, borderRadius: 36,
+                      background: isActive ? "rgba(255,255,255,0.2)" : C.primarySoft,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <MascotComp size={60} pose="happy" />
+                    </div>
+                    <div style={{ fontSize: 17, fontWeight: 800, textAlign: "center" }}>
+                      {p.name || "Kid"}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 600 }}>
+                      {p.age ? `Age ${p.age}` : "New"} · {p.xp.toLocaleString()} XP
+                    </div>
+                    {isActive && (
+                      <div style={{
+                        padding: "3px 10px", borderRadius: 10,
+                        background: "rgba(255,255,255,0.85)", color: C.primary,
+                        fontSize: 10, fontWeight: 800, letterSpacing: 1,
+                      }}>
+                        ACTIVE
+                      </div>
+                    )}
+                  </motion.button>
+                  {/* Delete affordance (long-press-style overlay via a small × button) */}
+                  {!isDeleting && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(p.id); }}
+                      aria-label={`Delete ${p.name || "profile"}`}
+                      style={{
+                        position: "absolute", top: 6, right: 6,
+                        width: 24, height: 24, borderRadius: 12,
+                        background: "rgba(255,255,255,0.9)",
+                        border: "none",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer",
+                        fontSize: 14, color: C.muted,
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                  {isDeleting && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      style={{
+                        position: "absolute", inset: 0,
+                        background: "rgba(255,255,255,0.96)",
+                        borderRadius: 24,
+                        padding: 12,
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
+                        border: `3px solid ${C.blush}`,
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, textAlign: "center", lineHeight: 1.3 }}>
+                        Delete <strong>{p.name || "this kid"}</strong>?
+                      </div>
+                      <div style={{ display: "flex", gap: 6, width: "100%" }}>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          style={{
+                            flex: 1, padding: "8px 4px", borderRadius: 12,
+                            background: C.primarySoft, color: C.primary,
+                            border: "none", cursor: "pointer",
+                            fontSize: 12, fontWeight: 800,
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => { deleteProfile(p.id); setConfirmDeleteId(null); }}
+                          style={{
+                            flex: 1, padding: "8px 4px", borderRadius: 12,
+                            background: C.blush, color: "white",
+                            border: "none", cursor: "pointer",
+                            fontSize: 12, fontWeight: 800,
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </motion.div>
+              );
+            })}
+            {/* + Add New card */}
+            <motion.button
+              initial={{ scale: 0.85, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ delay: profileList.length * 0.05, type: "spring", bounce: 0.4 }}
+              whileTap={{ scale: 0.94 }}
+              onClick={onAddNew}
+              style={{
+                width: "100%",
+                background: `linear-gradient(135deg, ${C.tealSoft}, ${C.primarySoft})`,
+                border: `3px dashed ${C.primary}`,
+                borderRadius: 24, padding: "20px 12px 16px",
+                cursor: "pointer",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+                color: C.primary,
+                fontFamily: uiFont,
+              }}
+            >
+              <div style={{
+                width: 72, height: 72, borderRadius: 36,
+                background: "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 40, fontWeight: 900, color: C.primary,
+              }}>
+                +
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 800, textAlign: "center" }}>
+                Add a kid
+              </div>
+              <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 600, textAlign: "center" }}>
+                Each kid gets their own progress
+              </div>
+            </motion.button>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const onboarded = useStore(s => s.onboarded);
   const completeLesson = useStore(s => s.completeLesson);
   const masteredPhonemes = useStore(s => s.masteredPhonemes);
-  const [screen, setScreen] = useState<Screen>(onboarded ? "home" : "splash");
+  const profiles = useStore(s => s.profiles);
+  const activeProfileId = useStore(s => s.activeProfileId);
+  const startAddProfile = useStore(s => s.startAddProfile);
+  // Initial screen selection with multi-profile awareness:
+  //   - Already onboarded → home
+  //   - No active kid but profiles exist (shared device wake-up) → picker
+  //   - Nobody at all → splash
+  const initialScreen: Screen = onboarded
+    ? "home"
+    : Object.keys(profiles).length > 0 && !activeProfileId
+      ? "profile-picker"
+      : "splash";
+  const [screen, setScreen] = useState<Screen>(initialScreen);
   const [tab, setTab] = useState<Tab>("home");
   const [currentLessonId, setCurrentLessonId] = useState<string>("sh-sound");
   const showTabs = ["home", "learn", "progress", "rewards", "profile"].includes(screen) && screen !== "lesson";
@@ -6977,8 +7247,15 @@ export default function App() {
           {screen === "lesson" && <LessonScreen onDone={handleLessonDone} lessonId={currentLessonId} />}
           {screen === "progress" && <ProgressScreen />}
           {screen === "rewards" && <RewardsScreen />}
-          {screen === "profile" && <ProfileScreen onRestart={() => setScreen("splash")} onOpenParent={() => setScreen("parent")} />}
+          {screen === "profile" && <ProfileScreen onRestart={() => setScreen("splash")} onOpenParent={() => setScreen("parent")} onOpenProfilePicker={() => setScreen("profile-picker")} />}
           {screen === "parent" && <ParentScreen onExit={() => setScreen("profile")} />}
+          {screen === "profile-picker" && (
+            <ProfilePickerScreen
+              onDone={() => { setScreen("home"); setTab("home"); }}
+              onAddNew={() => { startAddProfile(); setScreen("splash"); }}
+              allowClose={onboarded}
+            />
+          )}
         </div>
         {/* Tab bar */}
         {showTabs && (

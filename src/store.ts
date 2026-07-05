@@ -51,7 +51,19 @@ export type LessonResult = {
   newXp: number;
 };
 
-type State = {
+// ─── Multi-profile support ────────────────────────────────────────────────────
+// Multiple kids share one device. Each kid has their own progress (XP, streak,
+// mastered lessons, game stats, tier, mascot, etc.).
+//
+// Data model:
+//   - "Flat state" (name, age, xp, streak, etc.) = the ACTIVE kid's state.
+//     Existing code across the app reads flat state directly — no changes.
+//   - `profiles: Record<id, ProfileSnapshot>` = saved snapshots per kid.
+//   - `activeProfileId` = which kid is currently signed in.
+//
+// Switch flow: current flat → save to profiles[activeId] → load profiles[targetId] → flat.
+// Add flow: current flat → save → reset flat to defaults + activeId=null → app routes to onboarding.
+export type ProfileSnapshot = {
   name: string;
   age: number | null;
   activeMascot: number;
@@ -64,18 +76,21 @@ type State = {
   onboarded: boolean;
   weeklyDigest: boolean;
   parentEmail: string;
-  // Streak shield + daily session tracking
   lastSessionDay: string | null;
   lastShieldUseDay: string | null;
-  // Adaptive difficulty (lightweight running counters)
   hitsInARow: number;
   missesInARow: number;
-  difficultyLevel: 1 | 2 | 3; // word complexity WITHIN the current tier
-  difficultyTier: DifficultyTier; // coarse cohort — see DifficultyTier comment
-  // Per-game-type rollup: accuracy, attempts, time. Keyed by game key
-  // (e.g. "trace", "build", "flashcards", "listen-up", "fill-blank").
+  difficultyLevel: 1 | 2 | 3;
+  difficultyTier: DifficultyTier;
   gameStats: Record<string, GameStat>;
-  set: (patch: Partial<Omit<State, "set" | "addXp" | "completeLesson" | "reset" | "recordHit" | "recordMiss" | "nudgeTier" | "recordGameStat">>) => void;
+};
+
+type State = ProfileSnapshot & {
+  // Multi-profile registry
+  profiles: Record<string, ProfileSnapshot>;
+  activeProfileId: string | null;
+
+  set: (patch: Partial<Omit<State, "set" | "addXp" | "completeLesson" | "reset" | "recordHit" | "recordMiss" | "nudgeTier" | "recordGameStat" | "createProfile" | "switchProfile" | "startAddProfile" | "deleteProfile">>) => void;
   addXp: (n: number) => void;
   completeLesson: (phoneme: string, xp: number) => LessonResult;
   recordHit: () => void;
@@ -88,6 +103,20 @@ type State = {
     gameKey: string,
     payload: { correct: number; total: number; elapsedMs: number },
   ) => void;
+
+  // ── Profile actions ──
+  // Create a profile from the current onboarded flat state (called at end of
+  // onboarding). Generates an id and stores the snapshot.
+  createProfile: () => string;
+  // Save current flat → profiles[current], then load profiles[targetId] → flat.
+  switchProfile: (targetId: string) => void;
+  // Save current flat → profiles[current], then reset flat state (onboarded=false)
+  // and clear activeProfileId → App shell routes to onboarding for the new kid.
+  startAddProfile: () => void;
+  // Delete a profile. If deleting the active one, load the first remaining
+  // profile OR reset to fresh + clear activeProfileId.
+  deleteProfile: (id: string) => void;
+
   reset: () => void;
 };
 
@@ -103,28 +132,57 @@ const emptyGameStat = (): GameStat => ({
   attempts: 0, correct: 0, total: 0, totalTimeMs: 0, lastPlayedAt: 0,
 });
 
+// Default profile shape — used for fresh onboarding and reset()
+const emptyProfile = (): ProfileSnapshot => ({
+  name: "",
+  age: null,
+  activeMascot: 0,
+  textSize: "medium",
+  bgTint: 0,
+  streak: 0,
+  xp: 0,
+  lessonsCompleted: 0,
+  masteredPhonemes: [],
+  onboarded: false,
+  weeklyDigest: false,
+  parentEmail: "",
+  lastSessionDay: null,
+  lastShieldUseDay: null,
+  hitsInARow: 0,
+  missesInARow: 0,
+  difficultyLevel: 2,
+  difficultyTier: "developing",
+  gameStats: {},
+});
+
+// Extract the profile-level fields from state (excludes actions + profiles map).
+function snapshotOf(s: State): ProfileSnapshot {
+  return {
+    name: s.name, age: s.age, activeMascot: s.activeMascot,
+    textSize: s.textSize, bgTint: s.bgTint, streak: s.streak,
+    xp: s.xp, lessonsCompleted: s.lessonsCompleted,
+    masteredPhonemes: s.masteredPhonemes, onboarded: s.onboarded,
+    weeklyDigest: s.weeklyDigest, parentEmail: s.parentEmail,
+    lastSessionDay: s.lastSessionDay, lastShieldUseDay: s.lastShieldUseDay,
+    hitsInARow: s.hitsInARow, missesInARow: s.missesInARow,
+    difficultyLevel: s.difficultyLevel, difficultyTier: s.difficultyTier,
+    gameStats: s.gameStats,
+  };
+}
+
+// Generate a short random id for a profile.
+function newProfileId(): string {
+  return "p_" + Math.random().toString(36).slice(2, 10);
+}
+
 export const useStore = create<State>()(
   persist(
     (set, get) => ({
-      name: "",
-      age: null,
-      activeMascot: 0,
-      textSize: "medium",
-      bgTint: 0,
-      streak: 0,
-      xp: 0,
-      lessonsCompleted: 0,
-      masteredPhonemes: [],
-      onboarded: false,
-      weeklyDigest: false,
-      parentEmail: "",
-      lastSessionDay: null,
-      lastShieldUseDay: null,
-      hitsInARow: 0,
-      missesInARow: 0,
-      difficultyLevel: 2,
-      difficultyTier: "developing",
-      gameStats: {},
+      // Active kid's flat state (defaults to a fresh profile)
+      ...emptyProfile(),
+      // Multi-profile registry
+      profiles: {},
+      activeProfileId: null,
       set: (patch) => set(patch),
       addXp: (n) => set((s) => ({ xp: s.xp + n })),
       completeLesson: (phoneme, xp) => {
@@ -247,27 +305,72 @@ export const useStore = create<State>()(
           };
           return { gameStats: { ...s.gameStats, [gameKey]: next } };
         }),
+
+      // ── Profile actions ──────────────────────────────────────────────────
+      createProfile: () => {
+        const s = get();
+        const id = newProfileId();
+        set({
+          activeProfileId: id,
+          profiles: { ...s.profiles, [id]: snapshotOf(s) },
+        });
+        return id;
+      },
+
+      switchProfile: (targetId) => {
+        const s = get();
+        if (targetId === s.activeProfileId) return;
+        const target = s.profiles[targetId];
+        if (!target) return; // no such profile — no-op
+        // Save current flat → profiles[currentId], then load target → flat.
+        const nextProfiles = { ...s.profiles };
+        if (s.activeProfileId) nextProfiles[s.activeProfileId] = snapshotOf(s);
+        set({
+          ...target,
+          profiles: nextProfiles,
+          activeProfileId: targetId,
+        });
+      },
+
+      startAddProfile: () => {
+        const s = get();
+        // Save current flat → profiles map so the current kid's progress is safe
+        const nextProfiles = { ...s.profiles };
+        if (s.activeProfileId) nextProfiles[s.activeProfileId] = snapshotOf(s);
+        // Reset flat state to a fresh profile so the App shell routes to onboarding
+        set({
+          ...emptyProfile(),
+          profiles: nextProfiles,
+          activeProfileId: null,
+        });
+      },
+
+      deleteProfile: (id) => {
+        const s = get();
+        const nextProfiles = { ...s.profiles };
+        delete nextProfiles[id];
+        if (id !== s.activeProfileId) {
+          // Deleting a non-active profile — flat state untouched
+          set({ profiles: nextProfiles });
+          return;
+        }
+        // Deleting the active profile — pick a fallback
+        const remaining = Object.keys(nextProfiles);
+        if (remaining.length > 0) {
+          const nextId = remaining[0];
+          const nextSnap = nextProfiles[nextId];
+          set({ ...nextSnap, profiles: nextProfiles, activeProfileId: nextId });
+        } else {
+          // No profiles left — back to fresh onboarding
+          set({ ...emptyProfile(), profiles: nextProfiles, activeProfileId: null });
+        }
+      },
+
       reset: () =>
         set({
-          name: "",
-          age: null,
-          activeMascot: 0,
-          textSize: "medium",
-          bgTint: 0,
-          onboarded: false,
-          streak: 0,
-          xp: 0,
-          lessonsCompleted: 0,
-          masteredPhonemes: [],
-          weeklyDigest: false,
-          parentEmail: "",
-          lastSessionDay: null,
-          lastShieldUseDay: null,
-          hitsInARow: 0,
-          missesInARow: 0,
-          difficultyLevel: 2,
-          difficultyTier: "developing",
-          gameStats: {},
+          ...emptyProfile(),
+          profiles: {},
+          activeProfileId: null,
         }),
     }),
     {
