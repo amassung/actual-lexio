@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { syncLessonCompletion, syncGameSession, syncStudentProgress } from "./services/progressSync";
 
 export type TextSize = "small" | "medium" | "large";
 
@@ -102,9 +103,11 @@ type State = ProfileSnapshot & {
   // or tests. Always safe; clamps at the ends.
   nudgeTier: (direction: "up" | "down") => void;
   // Append one game-session result to the rollup for that game key.
+  // Optional `phoneme` gets attached to the Supabase game_sessions row so
+  // teacher dashboards can slice accuracy by phoneme × game type.
   recordGameStat: (
     gameKey: string,
-    payload: { correct: number; total: number; elapsedMs: number },
+    payload: { correct: number; total: number; elapsedMs: number; phoneme?: string | null },
   ) => void;
 
   // ── Profile actions ──
@@ -224,15 +227,28 @@ export const useStore = create<State>()(
           }
         }
 
+        const nextLessonsCompleted = s.lessonsCompleted + 1;
         set({
           xp: newXp,
-          lessonsCompleted: s.lessonsCompleted + 1,
+          lessonsCompleted: nextLessonsCompleted,
           masteredPhonemes: s.masteredPhonemes.includes(phoneme)
             ? s.masteredPhonemes
             : [...s.masteredPhonemes, phoneme],
           lastSessionDay: today,
           lastShieldUseDay,
           streak: newStreak,
+        });
+
+        // ── Fire-and-forget Supabase sync ──
+        // record_lesson_completion is idempotent per-completion, so we send
+        // one row per call. Progress fields go through the debounced sync.
+        void syncLessonCompletion(phoneme, xp);
+        syncStudentProgress({
+          xp: newXp,
+          streak: newStreak,
+          lessons_completed: nextLessonsCompleted,
+          last_session_day: today,
+          last_shield_use_day: lastShieldUseDay,
         });
 
         return {
@@ -266,6 +282,13 @@ export const useStore = create<State>()(
               next.hitsInARow = 0;
             }
           }
+          // Debounced push — coalesces bursts into one server write.
+          syncStudentProgress({
+            hits_in_a_row: next.hitsInARow ?? 0,
+            misses_in_a_row: 0,
+            difficulty_level: next.difficultyLevel,
+            difficulty_tier: next.difficultyTier,
+          });
           return next;
         }),
       recordMiss: () =>
@@ -289,17 +312,32 @@ export const useStore = create<State>()(
               next.missesInARow = 0;
             }
           }
+          syncStudentProgress({
+            hits_in_a_row: 0,
+            misses_in_a_row: next.missesInARow ?? 0,
+            difficulty_level: next.difficultyLevel,
+            difficulty_tier: next.difficultyTier,
+          });
           return next;
         }),
       nudgeTier: (direction) =>
-        set((s) => ({
-          difficultyTier: bumpTier(s.difficultyTier, direction),
-          // Reset the per-tier complexity to a neutral starting point.
-          difficultyLevel: 2,
-          hitsInARow: 0,
-          missesInARow: 0,
-        })),
-      recordGameStat: (gameKey, payload) =>
+        set((s) => {
+          const nextTier = bumpTier(s.difficultyTier, direction);
+          syncStudentProgress({
+            difficulty_tier: nextTier,
+            difficulty_level: 2,
+            hits_in_a_row: 0,
+            misses_in_a_row: 0,
+          });
+          return {
+            difficultyTier: nextTier,
+            // Reset the per-tier complexity to a neutral starting point.
+            difficultyLevel: 2,
+            hitsInARow: 0,
+            missesInARow: 0,
+          };
+        }),
+      recordGameStat: (gameKey, payload) => {
         set((s) => {
           const prev = s.gameStats[gameKey] ?? emptyGameStat();
           const next: GameStat = {
@@ -310,7 +348,21 @@ export const useStore = create<State>()(
             lastPlayedAt: Date.now(),
           };
           return { gameStats: { ...s.gameStats, [gameKey]: next } };
-        }),
+        });
+        // Fire-and-forget: one game_sessions row per finished game, plus a
+        // debounced progress push so `last_game_key` reflects reality.
+        void syncGameSession({
+          gameKey,
+          phoneme: payload.phoneme ?? null,
+          correct: payload.correct,
+          total: payload.total,
+          elapsedMs: payload.elapsedMs,
+        });
+        syncStudentProgress({
+          last_lesson_id: get().lastLessonId ?? null,
+          last_game_key: gameKey,
+        });
+      },
 
       // ── Profile actions ──────────────────────────────────────────────────
       createProfile: () => {

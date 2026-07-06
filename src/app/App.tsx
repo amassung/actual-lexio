@@ -6,6 +6,9 @@ import { TouchBackend } from "react-dnd-touch-backend";
 import { useStore, type LessonResult, pickWord, WORD_BANK, tierForAge } from "../store";
 import { playTTS, playSequence, cancelTTS, playPhonemeFile, subscribeTTSStatus, type TTSStatus } from "../services/tts";
 import { playDing, playAww, playFanfare } from "../services/sfx";
+import { signInAsStudent, isStudentSignedIn, signOutStudent, type StudentSession } from "../services/studentSession";
+import { attachFlushOnHide, flushSyncNow } from "../services/progressSync";
+import { supabaseConfigured } from "../services/supabase";
 import { TraceLetter } from "../components/TraceLetter";
 
 const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || (navigator as any).maxTouchPoints > 0);
@@ -5340,7 +5343,7 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
       const elapsedMs = Math.max(0, Date.now() - sessionStartRef.current);
       const correct = sessionCorrectRef.current;
       const total = sessionTotalRef.current;
-      recordGameStat(activeGame, { correct, total, elapsedMs });
+      recordGameStat(activeGame, { correct, total, elapsedMs, phoneme: lesson.phoneme });
       setLastResult({ key: activeGame, correct, total, ms: elapsedMs });
       setCompleted(prev => {
         const n = new Set(prev);
@@ -7166,13 +7169,47 @@ function ProfilePickerScreen({ onDone, onAddNew, allowClose }: {
   const activeProfileId = useStore(s => s.activeProfileId);
   const switchProfile = useStore(s => s.switchProfile);
   const deleteProfile = useStore(s => s.deleteProfile);
+  const setStore = useStore(s => s.set);
+  const createProfile = useStore(s => s.createProfile);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showClassSignIn, setShowClassSignIn] = useState(false);
 
   const profileList = Object.entries(profiles).map(([id, p]) => ({ id, ...p }));
   const mascots = [Lexi, Echo, Glow, Bubble, Brick];
 
   const pick = (id: string) => {
+    // Flush any pending debounced progress writes before we swap identities,
+    // so kid A's work goes to kid A's Supabase row (not kid B's).
+    void flushSyncNow();
     if (id !== activeProfileId) switchProfile(id);
+    onDone();
+  };
+
+  // Class-code sign-in: hydrates the flat state from Supabase's student_login
+  // response, then registers a local profile so the kid shows up here on
+  // subsequent visits and their progress syncs both ways.
+  const applyRemoteSession = (session: StudentSession) => {
+    // Ensure any current kid's flat state is snapshotted before we overwrite it.
+    if (activeProfileId) switchProfile(activeProfileId); // no-op if same id
+    setStore({
+      name: session.first_name,
+      age: null,
+      activeMascot: session.avatar_mascot ?? 0,
+      xp: session.xp ?? 0,
+      streak: session.streak ?? 0,
+      lessonsCompleted: session.lessons_completed ?? 0,
+      masteredPhonemes: session.mastered_phonemes ?? [],
+      lastSessionDay: session.last_session_day ?? null,
+      hitsInARow: session.hits_in_a_row ?? 0,
+      missesInARow: session.misses_in_a_row ?? 0,
+      difficultyLevel: session.difficulty_level ?? 2,
+      difficultyTier: session.difficulty_tier ?? "developing",
+      lastLessonId: session.last_lesson_id ?? null,
+      lastGameKey: session.last_game_key ?? null,
+      onboarded: true,
+    });
+    createProfile();
+    setShowClassSignIn(false);
     onDone();
   };
 
@@ -7372,7 +7409,249 @@ function ProfilePickerScreen({ onDone, onAddNew, allowClose }: {
             </motion.button>
           </div>
         )}
+
+        {/* Class-code sign-in — only shown when Supabase is configured */}
+        {supabaseConfigured && (
+          <motion.button
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setShowClassSignIn(true)}
+            style={{
+              width: "100%",
+              marginTop: 18,
+              padding: "14px 16px",
+              borderRadius: 18, border: "none",
+              background: C.white,
+              display: "flex", alignItems: "center", gap: 12,
+              cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+              fontFamily: uiFont,
+            }}
+          >
+            <div style={{
+              width: 40, height: 40, borderRadius: 14,
+              background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "white", fontSize: 18, fontWeight: 900, flexShrink: 0,
+            }}>
+              🏫
+            </div>
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>
+                Sign in with class code
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                For students in a Lexio classroom
+              </div>
+            </div>
+            <ChevronRight size={18} color={C.muted} />
+          </motion.button>
+        )}
+
+        {isStudentSignedIn() && (
+          <div className="text-center" style={{ marginTop: 12 }}>
+            <button
+              onClick={() => { signOutStudent(); }}
+              style={{
+                background: "none", border: "none", color: C.muted,
+                fontSize: 11, cursor: "pointer", textDecoration: "underline",
+                fontFamily: uiFont,
+              }}
+            >
+              Sign out of classroom
+            </button>
+          </div>
+        )}
       </div>
+
+      {showClassSignIn && (
+        <ClassCodeSignIn
+          onClose={() => setShowClassSignIn(false)}
+          onSuccess={applyRemoteSession}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+// ─── Class-code sign-in modal ────────────────────────────────────────────────
+function ClassCodeSignIn({ onClose, onSuccess }: {
+  onClose: () => void;
+  onSuccess: (session: StudentSession) => void;
+}) {
+  const [classCode, setClassCode] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [pin, setPin] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = classCode.trim().length >= 4 && firstName.trim().length >= 1 && pin.trim().length === 4 && !submitting;
+
+  const submit = async () => {
+    setError(null);
+    setSubmitting(true);
+    const session = await signInAsStudent(classCode, firstName, pin);
+    setSubmitting(false);
+    if (!session) {
+      setError("Hmm — check the code, name, and PIN and try again.");
+      return;
+    }
+    onSuccess(session);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: "absolute", inset: 0, zIndex: 300,
+        background: "rgba(26,26,46,0.55)", backdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 20,
+        fontFamily: uiFont,
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 20, scale: 0.96, opacity: 0 }}
+        animate={{ y: 0, scale: 1, opacity: 1 }}
+        transition={{ type: "spring", bounce: 0.35 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 340,
+          background: C.white, borderRadius: 24,
+          padding: 22,
+          boxShadow: "0 30px 80px rgba(26,26,46,0.5)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: C.primary }}>
+              Classroom sign-in
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, marginTop: 3 }}>
+              Enter your class code
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: C.primarySoft, border: "none", cursor: "pointer",
+              width: 30, height: 30, borderRadius: 15,
+              fontSize: 16, color: C.primary,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <label style={{ display: "block", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
+            Class code
+          </div>
+          <input
+            value={classCode}
+            onChange={(e) => setClassCode(e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 6))}
+            placeholder="ABC234"
+            autoFocus
+            style={{
+              width: "100%", padding: "12px 14px",
+              fontFamily: dyslexicFont, fontSize: 22, letterSpacing: 3,
+              textAlign: "center",
+              background: C.primarySoft,
+              border: `2px solid ${classCode.length >= 4 ? C.primary : "transparent"}`,
+              borderRadius: 14,
+              color: C.ink,
+              outline: "none",
+              textTransform: "uppercase",
+            }}
+          />
+        </label>
+
+        <label style={{ display: "block", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
+            Your first name
+          </div>
+          <input
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value.slice(0, 40))}
+            placeholder="Maya"
+            style={{
+              width: "100%", padding: "12px 14px",
+              fontFamily: uiFont, fontSize: 16,
+              background: C.primarySoft,
+              border: `2px solid ${firstName.trim() ? C.primary : "transparent"}`,
+              borderRadius: 14,
+              color: C.ink,
+              outline: "none",
+            }}
+          />
+        </label>
+
+        <label style={{ display: "block", marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
+            PIN (4 digits)
+          </div>
+          <input
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="••••"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            style={{
+              width: "100%", padding: "12px 14px",
+              fontFamily: dyslexicFont, fontSize: 26, letterSpacing: 10,
+              textAlign: "center",
+              background: C.primarySoft,
+              border: `2px solid ${pin.length === 4 ? C.primary : "transparent"}`,
+              borderRadius: 14,
+              color: C.ink,
+              outline: "none",
+            }}
+          />
+        </label>
+
+        {error && (
+          <div style={{
+            padding: "8px 12px", borderRadius: 12,
+            background: "#FFE0E0", color: "#B14040",
+            fontSize: 12, fontWeight: 700, marginBottom: 12, textAlign: "center",
+          }}>
+            {error}
+          </div>
+        )}
+
+        <motion.button
+          whileTap={canSubmit ? { scale: 0.96 } : {}}
+          onClick={submit}
+          disabled={!canSubmit}
+          style={{
+            width: "100%", padding: "14px 18px", borderRadius: 16,
+            border: "none",
+            background: canSubmit
+              ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`
+              : "#E0DDEC",
+            color: canSubmit ? "white" : C.muted,
+            fontSize: 15, fontWeight: 800,
+            cursor: canSubmit ? "pointer" : "not-allowed",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: canSubmit ? `0 8px 22px rgba(108,71,255,0.35)` : "none",
+            fontFamily: uiFont,
+          }}
+        >
+          {submitting ? "Signing in…" : "Sign in"}
+          {!submitting && canSubmit && <ArrowRight size={18} />}
+        </motion.button>
+
+        <div style={{ fontSize: 10, color: C.muted, textAlign: "center", marginTop: 12, lineHeight: 1.5 }}>
+          Your teacher gave you the class code and PIN.
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -7398,6 +7677,10 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [currentLessonId, setCurrentLessonId] = useState<string>("sh-sound");
   const showTabs = ["home", "learn", "progress", "rewards", "profile"].includes(screen) && screen !== "lesson";
+
+  // One-shot: register the "flush pending progress on tab hide" handler so
+  // kids closing the tab don't lose the last debounce window.
+  useEffect(() => { attachFlushOnHide(); }, []);
 
   const handleTabChange = (t: Tab) => { setTab(t); setScreen(t as Screen); };
 
