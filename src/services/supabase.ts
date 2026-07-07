@@ -25,8 +25,15 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 // pattern `import.meta.env.VITE_XXX`. Do NOT split it across lines or wrap
 // with intermediate type-cast parens — Vite silently skips the replacement
 // and both values come out empty at runtime.
-const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Trim + strip any trailing slash — otherwise supabase-js constructs paths
+// like `https://xxxxx.supabase.co//rest/v1/rpc/...` (double slash) and
+// PostgREST rejects with PGRST125 "Invalid path specified in request URL".
+const SUPABASE_URL = (
+  ((import.meta as any).env?.VITE_SUPABASE_URL as string | undefined) ?? ""
+).trim().replace(/\/+$/, "") || undefined;
+const SUPABASE_ANON_KEY = (
+  ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined) ?? ""
+).trim() || undefined;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   // We warn instead of throwing so local dev without the env still boots.
