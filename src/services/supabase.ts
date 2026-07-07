@@ -25,12 +25,29 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 // pattern `import.meta.env.VITE_XXX`. Do NOT split it across lines or wrap
 // with intermediate type-cast parens — Vite silently skips the replacement
 // and both values come out empty at runtime.
-// Trim + strip any trailing slash — otherwise supabase-js constructs paths
-// like `https://xxxxx.supabase.co//rest/v1/rpc/...` (double slash) and
-// PostgREST rejects with PGRST125 "Invalid path specified in request URL".
-const SUPABASE_URL = (
-  ((import.meta as any).env?.VITE_SUPABASE_URL as string | undefined) ?? ""
-).trim().replace(/\/+$/, "") || undefined;
+// The supabase-js client already appends "/rest/v1/..." internally, so the
+// URL we pass must be JUST the project origin (https://xxxxx.supabase.co).
+// This normalizer defends against three common Vercel-paste mistakes:
+//   - trailing slash              → https://xxxxx.supabase.co/
+//   - trailing "/rest/v1" segment → https://xxxxx.supabase.co/rest/v1
+//   - trailing "/rest/v1/"        → both combined
+// Any of the above would produce a doubled path (PGRST125) at request time.
+function normalizeSupabaseUrl(raw: string | undefined): string | undefined {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return undefined;
+  try {
+    // Prefer real URL parsing → discards any stray path/query/hash.
+    const u = new URL(trimmed);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    // Fallback for values that URL() rejects — still strip common suffixes.
+    return trimmed.replace(/\/+$/, "").replace(/\/rest\/v1$/i, "");
+  }
+}
+
+const SUPABASE_URL = normalizeSupabaseUrl(
+  (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined,
+);
 const SUPABASE_ANON_KEY = (
   ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined) ?? ""
 ).trim() || undefined;
