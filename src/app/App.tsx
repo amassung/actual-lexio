@@ -7,6 +7,11 @@ import { useStore, type LessonResult, pickWord, WORD_BANK, tierForAge } from "..
 import { playTTS, playSequence, cancelTTS, playPhonemeFile, subscribeTTSStatus, type TTSStatus } from "../services/tts";
 import { playDing, playAww, playFanfare } from "../services/sfx";
 import { signInAsStudent, isStudentSignedIn, signOutStudent, type StudentSession } from "../services/studentSession";
+import {
+  signUpTeacher, signInTeacher, signOutTeacher,
+  getCurrentTeacher, isTeacherSignedIn,
+  type TeacherRow,
+} from "../services/teacherAuth";
 import { attachFlushOnHide, flushSyncNow } from "../services/progressSync";
 import { supabaseConfigured } from "../services/supabase";
 import { TraceLetter } from "../components/TraceLetter";
@@ -131,7 +136,7 @@ function speakLesson(phoneme: string, word: string) {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Screen = "splash" | "onboard" | "home" | "learn" | "games" | "lesson" | "progress" | "rewards" | "profile" | "parent" | "profile-picker";
+type Screen = "splash" | "onboard" | "home" | "learn" | "games" | "lesson" | "progress" | "rewards" | "profile" | "parent" | "profile-picker" | "teacher-auth" | "teacher-dashboard";
 type LessonStep = "hear" | "see" | "trace" | "say" | "build" | "win";
 type Tab = "home" | "learn" | "progress" | "rewards" | "profile";
 type MicState = "idle" | "listening" | "processing" | "encourage";
@@ -7160,10 +7165,11 @@ function IOSInstallBanner() {
 // Multi-kid households pick which child is playing. Shown:
 //   - When Profile → Switch Kid is tapped (has back button)
 //   - On app load if activeProfileId is null AND profiles exist (no back)
-function ProfilePickerScreen({ onDone, onAddNew, allowClose }: {
+function ProfilePickerScreen({ onDone, onAddNew, allowClose, onOpenTeacherAuth }: {
   onDone: () => void;
   onAddNew: () => void;
   allowClose: boolean;
+  onOpenTeacherAuth: () => void;
 }) {
   const profiles = useStore(s => s.profiles);
   const activeProfileId = useStore(s => s.activeProfileId);
@@ -7472,6 +7478,24 @@ function ProfilePickerScreen({ onDone, onAddNew, allowClose }: {
           onSuccess={applyRemoteSession}
         />
       )}
+      {/* Teacher entry — small link at the bottom, deliberately understated so
+          kids don't get curious. Teachers use their own device / bookmark and
+          only need this once (session persists). */}
+      {supabaseConfigured && (
+        <div className="px-6 pb-6 pt-2" style={{ textAlign: "center" }}>
+          <button
+            onClick={onOpenTeacherAuth}
+            style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              fontSize: 12, fontWeight: 700, color: C.muted,
+              fontFamily: uiFont,
+              padding: "6px 12px",
+            }}
+          >
+            For teachers →
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -7656,6 +7680,256 @@ function ClassCodeSignIn({ onClose, onSuccess }: {
   );
 }
 
+// ─── Teacher Auth Screen ──────────────────────────────────────────────────────
+// One screen, two modes: Sign In (default) and Sign Up. Sits behind a
+// small "For teachers" link on the profile picker. Uses Supabase Auth for
+// real email/password sessions, with the bootstrap_teacher RPC handling
+// the schools + teachers row creation on first signup.
+function TeacherAuthScreen({ onDone, onBack }: { onDone: (teacher: TeacherRow) => void; onBack: () => void }) {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [schoolName, setSchoolName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+
+  const submit = async () => {
+    if (loading) return;
+    setLoading(true); setError(null); setNeedsConfirm(false);
+    try {
+      if (mode === "signup") {
+        const res = await signUpTeacher({ email, password, displayName, schoolName });
+        if (res.error) { setError(res.error); return; }
+        if (res.needsEmailConfirmation) { setNeedsConfirm(true); return; }
+        if (res.teacher) { onDone(res.teacher); return; }
+        setError("Something went wrong. Try again.");
+      } else {
+        const res = await signInTeacher({ email, password });
+        if (res.error) { setError(res.error); return; }
+        if (res.teacher) { onDone(res.teacher); return; }
+        setError("Signed in but couldn't load your profile.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      className="flex flex-col h-full overflow-y-auto"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      style={{ fontFamily: uiFont, background: `linear-gradient(160deg, ${C.tealSoft}, ${C.bg})` }}
+    >
+      {/* Header */}
+      <div className="px-6 pt-14 pb-4 flex items-center gap-3">
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={onBack}
+          style={{
+            width: 44, height: 44, borderRadius: 22,
+            background: C.white,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "none", cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(93,202,165,0.15)",
+          }}
+          aria-label="Back"
+        >
+          <ChevronLeft size={22} color={C.teal} />
+        </motion.button>
+        <div className="flex-1">
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, letterSpacing: 2, textTransform: "uppercase" }}>
+            For teachers
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.ink, lineHeight: 1.1 }}>
+            {mode === "signin" ? "Welcome back" : "Create your account"}
+          </div>
+        </div>
+      </div>
+
+      {/* Mode toggle */}
+      <div className="px-6 pb-4">
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4,
+          background: C.white, borderRadius: 14, padding: 4,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        }}>
+          {(["signin", "signup"] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setError(null); setNeedsConfirm(false); }}
+              style={{
+                padding: "10px 12px", borderRadius: 10, border: "none",
+                background: mode === m ? `linear-gradient(135deg, ${C.teal}, ${C.echoDark})` : "transparent",
+                color: mode === m ? "white" : C.muted,
+                fontSize: 13, fontWeight: 800,
+                cursor: "pointer", fontFamily: uiFont,
+                transition: "all 0.2s",
+              }}
+            >
+              {m === "signin" ? "Sign in" : "Sign up"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Form */}
+      <div className="px-6 pb-4 flex flex-col gap-3">
+        {mode === "signup" && (
+          <>
+            <Field label="Your name" value={displayName} onChange={setDisplayName} placeholder="Ms. Alex" autoComplete="name" />
+            <Field label="School name" value={schoolName} onChange={setSchoolName} placeholder="Test Elementary" autoComplete="organization" />
+          </>
+        )}
+        <Field label="Email" value={email} onChange={setEmail} placeholder="teacher@school.org" type="email" autoComplete="email" />
+        <Field label="Password" value={password} onChange={setPassword} placeholder={mode === "signup" ? "At least 6 characters" : ""} type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} />
+
+        {error && (
+          <div style={{
+            padding: "10px 14px", borderRadius: 14,
+            background: "#FFE0E0", color: "#8A2A2A",
+            fontSize: 12, fontWeight: 700, lineHeight: 1.4,
+          }}>
+            {error}
+          </div>
+        )}
+        {needsConfirm && (
+          <div style={{
+            padding: "10px 14px", borderRadius: 14,
+            background: C.tealSoft, color: C.teal,
+            fontSize: 12, fontWeight: 700, lineHeight: 1.4,
+          }}>
+            Almost done — check your inbox for a confirmation email, then come back and sign in.
+          </div>
+        )}
+      </div>
+
+      {/* Submit */}
+      <div className="px-6 pb-5 mt-auto">
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          onClick={submit}
+          disabled={loading}
+          style={{
+            width: "100%", padding: "16px 24px",
+            borderRadius: 20, border: "none",
+            background: loading
+              ? "#CCC"
+              : `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+            color: "white", fontWeight: 800, fontSize: 17,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: loading ? "none" : `0 10px 28px rgba(93,202,165,0.4)`,
+            cursor: loading ? "not-allowed" : "pointer",
+            fontFamily: uiFont,
+          }}
+        >
+          {loading ? "…" : mode === "signin" ? "Sign in" : "Create account"}
+          {!loading && <ArrowRight size={20} />}
+        </motion.button>
+        <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+          Teachers only. Kids should use their class code.
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// Small inline text field — used only by TeacherAuthScreen.
+function Field({ label, value, onChange, placeholder, type = "text", autoComplete }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; type?: string; autoComplete?: string;
+}) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>
+        {label}
+      </span>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        type={type}
+        autoComplete={autoComplete}
+        style={{
+          padding: "12px 14px", borderRadius: 14,
+          border: `2px solid ${value ? C.teal : C.primarySoft}`,
+          background: C.white,
+          fontSize: 15, fontFamily: uiFont, color: C.ink,
+          outline: "none",
+          transition: "border-color 0.2s",
+        }}
+      />
+    </label>
+  );
+}
+
+// ─── Teacher Dashboard Screen (Phase A placeholder) ───────────────────────────
+// Phase B/C fills this in with classroom mgmt + analytics + AI summary.
+function TeacherDashboardScreen({ teacher, onSignOut }: { teacher: TeacherRow; onSignOut: () => void }) {
+  return (
+    <motion.div
+      className="flex flex-col h-full overflow-y-auto"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      style={{ fontFamily: uiFont, background: `linear-gradient(160deg, ${C.tealSoft}, ${C.bg})` }}
+    >
+      <div className="px-6 pt-14 pb-4">
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, letterSpacing: 2, textTransform: "uppercase" }}>
+          Teacher Dashboard
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 900, color: C.ink, lineHeight: 1.1, marginTop: 4 }}>
+          Welcome, {teacher.display_name}!
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+          {teacher.email}
+        </div>
+      </div>
+
+      {/* Placeholder card — will become classroom list in Phase B */}
+      <div className="px-6 pb-5">
+        <Card className="p-5" style={{ background: C.white }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 8 }}>
+            Your classrooms
+          </div>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+            No classrooms yet.
+          </div>
+          <div style={{
+            marginTop: 12, padding: "12px 14px", borderRadius: 12,
+            background: C.tealSoft, color: C.teal,
+            fontSize: 11, fontWeight: 700, lineHeight: 1.5,
+          }}>
+            👷 Classroom creation, student roster, and the analytics dashboard land in the next slice.
+            You can already add students directly via Supabase for pilot testing.
+          </div>
+        </Card>
+      </div>
+
+      {/* Sign out */}
+      <div className="px-6 pb-8 mt-auto">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onSignOut}
+          style={{
+            width: "100%", padding: "14px 20px",
+            borderRadius: 16, border: "none",
+            background: C.primarySoft, color: C.primary,
+            fontWeight: 800, fontSize: 14,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            cursor: "pointer", fontFamily: uiFont,
+          }}
+        >
+          Sign out
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const onboarded = useStore(s => s.onboarded);
@@ -7676,11 +7950,29 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(initialScreen);
   const [tab, setTab] = useState<Tab>("home");
   const [currentLessonId, setCurrentLessonId] = useState<string>("sh-sound");
+  // Teacher session — populated on app load if a supabase auth session exists.
+  const [teacher, setTeacher] = useState<TeacherRow | null>(null);
   const showTabs = ["home", "learn", "progress", "rewards", "profile"].includes(screen) && screen !== "lesson";
 
   // One-shot: register the "flush pending progress on tab hide" handler so
   // kids closing the tab don't lose the last debounce window.
   useEffect(() => { attachFlushOnHide(); }, []);
+
+  // On app load, check whether a teacher session is already present. If yes,
+  // route straight to the teacher dashboard — teachers won't want to walk
+  // through the kid onboarding every time they open the app.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const signedIn = await isTeacherSignedIn();
+      if (cancelled || !signedIn) return;
+      const t = await getCurrentTeacher();
+      if (cancelled || !t) return;
+      setTeacher(t);
+      setScreen("teacher-dashboard");
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleTabChange = (t: Tab) => { setTab(t); setScreen(t as Screen); };
 
@@ -7771,6 +8063,23 @@ export default function App() {
               onDone={() => { setScreen("home"); setTab("home"); }}
               onAddNew={() => { startAddProfile(); setScreen("splash"); }}
               allowClose={onboarded}
+              onOpenTeacherAuth={() => setScreen("teacher-auth")}
+            />
+          )}
+          {screen === "teacher-auth" && (
+            <TeacherAuthScreen
+              onDone={(t) => { setTeacher(t); setScreen("teacher-dashboard"); }}
+              onBack={() => setScreen(onboarded ? "profile" : "profile-picker")}
+            />
+          )}
+          {screen === "teacher-dashboard" && teacher && (
+            <TeacherDashboardScreen
+              teacher={teacher}
+              onSignOut={async () => {
+                await signOutTeacher();
+                setTeacher(null);
+                setScreen(onboarded ? "profile" : "profile-picker");
+              }}
             />
           )}
           <IOSInstallBanner />
