@@ -12,6 +12,12 @@ import {
   getCurrentTeacher, isTeacherSignedIn,
   type TeacherRow,
 } from "../services/teacherAuth";
+import {
+  listClassrooms, createClassroom, deleteClassroom, renameClassroom,
+  listStudents, addStudent, updateStudentPin, renameStudent, deleteStudent,
+  randomPin,
+  type Classroom, type StudentRow,
+} from "../services/teacherApi";
 import { attachFlushOnHide, flushSyncNow } from "../services/progressSync";
 import { supabaseConfigured } from "../services/supabase";
 import { TraceLetter } from "../components/TraceLetter";
@@ -7869,6 +7875,70 @@ function Field({ label, value, onChange, placeholder, type = "text", autoComplet
 // ─── Teacher Dashboard Screen (Phase A placeholder) ───────────────────────────
 // Phase B/C fills this in with classroom mgmt + analytics + AI summary.
 function TeacherDashboardScreen({ teacher, onSignOut }: { teacher: TeacherRow; onSignOut: () => void }) {
+  // Two views: "list" (all classrooms) and "detail" (single classroom + roster)
+  const [view, setView] = useState<"list" | "detail">("list");
+  const [openClassroom, setOpenClassroom] = useState<Classroom | null>(null);
+
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Modals
+  const [showNewClassroom, setShowNewClassroom] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true); setErr(null);
+    try {
+      const rows = await listClassrooms();
+      setClassrooms(rows);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  const onCreate = async (name: string) => {
+    try {
+      const c = await createClassroom(name);
+      setClassrooms(prev => [...prev, c]);
+      setShowNewClassroom(false);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+
+  // ── Detail view ────────────────────────────────────────────────────────
+  if (view === "detail" && openClassroom) {
+    return (
+      <ClassroomDetailView
+        classroom={openClassroom}
+        onBack={() => { setView("list"); setOpenClassroom(null); void refresh(); }}
+        onDeleteClassroom={async () => {
+          if (!confirm(`Delete "${openClassroom.name}"? This removes all students in it.`)) return;
+          try {
+            await deleteClassroom(openClassroom.id);
+            setClassrooms(prev => prev.filter(c => c.id !== openClassroom.id));
+            setView("list"); setOpenClassroom(null);
+          } catch (e) {
+            alert((e as Error).message);
+          }
+        }}
+        onRenameClassroom={async (name) => {
+          try {
+            await renameClassroom(openClassroom.id, name);
+            setOpenClassroom({ ...openClassroom, name });
+            setClassrooms(prev => prev.map(c => c.id === openClassroom.id ? { ...c, name } : c));
+          } catch (e) {
+            alert((e as Error).message);
+          }
+        }}
+      />
+    );
+  }
+
+  // ── List view (default) ────────────────────────────────────────────────
   return (
     <motion.div
       className="flex flex-col h-full overflow-y-auto"
@@ -7877,55 +7947,656 @@ function TeacherDashboardScreen({ teacher, onSignOut }: { teacher: TeacherRow; o
       transition={{ duration: 0.3, ease: "easeOut" }}
       style={{ fontFamily: uiFont, background: `linear-gradient(160deg, ${C.tealSoft}, ${C.bg})` }}
     >
-      <div className="px-6 pt-14 pb-4">
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, letterSpacing: 2, textTransform: "uppercase" }}>
-          Teacher Dashboard
+      <div className="px-6 pt-14 pb-4 flex items-start justify-between gap-3">
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, letterSpacing: 2, textTransform: "uppercase" }}>
+            Teacher Dashboard
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: C.ink, lineHeight: 1.1, marginTop: 4 }}>
+            Welcome, {teacher.display_name}
+          </div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+            {teacher.email}
+          </div>
         </div>
-        <div style={{ fontSize: 26, fontWeight: 900, color: C.ink, lineHeight: 1.1, marginTop: 4 }}>
-          Welcome, {teacher.display_name}!
+        <button
+          onClick={onSignOut}
+          style={{
+            background: C.white, border: "none",
+            padding: "8px 12px", borderRadius: 12,
+            fontSize: 11, fontWeight: 800, color: C.muted,
+            cursor: "pointer", fontFamily: uiFont,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+
+      {/* Section title + New button */}
+      <div className="px-6 pb-3 flex items-center justify-between">
+        <div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>
+          Your classrooms {classrooms.length > 0 && <span style={{ color: C.muted, fontWeight: 600 }}>· {classrooms.length}</span>}
         </div>
-        <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
-          {teacher.email}
+        <motion.button
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setShowNewClassroom(true)}
+          style={{
+            padding: "8px 14px", borderRadius: 14, border: "none",
+            background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+            color: "white", fontSize: 12, fontWeight: 800,
+            cursor: "pointer", fontFamily: uiFont,
+            boxShadow: `0 4px 12px rgba(93,202,165,0.3)`,
+            display: "flex", alignItems: "center", gap: 4,
+          }}
+        >
+          + New
+        </motion.button>
+      </div>
+
+      {/* Classroom list */}
+      <div className="flex-1 overflow-y-auto px-6 pb-5">
+        {loading && (
+          <div style={{ textAlign: "center", color: C.muted, fontSize: 12, padding: "40px 0" }}>
+            Loading classrooms…
+          </div>
+        )}
+        {err && (
+          <div style={{
+            padding: "10px 14px", borderRadius: 14,
+            background: "#FFE0E0", color: "#8A2A2A",
+            fontSize: 12, fontWeight: 700, marginBottom: 12,
+          }}>
+            {err}
+          </div>
+        )}
+        {!loading && classrooms.length === 0 && (
+          <Card className="p-6" style={{ background: C.white, textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🏫</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 4 }}>
+              No classrooms yet
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 14 }}>
+              Create your first classroom to get a class code, then add students.
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setShowNewClassroom(true)}
+              style={{
+                padding: "10px 20px", borderRadius: 14, border: "none",
+                background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+                color: "white", fontSize: 13, fontWeight: 800,
+                cursor: "pointer", fontFamily: uiFont,
+              }}
+            >
+              Create classroom
+            </motion.button>
+          </Card>
+        )}
+        {!loading && classrooms.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {classrooms.map(c => (
+              <motion.button
+                key={c.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => { setOpenClassroom(c); setView("detail"); }}
+                style={{
+                  background: C.white, border: "none",
+                  borderRadius: 20, padding: "16px 18px",
+                  textAlign: "left", cursor: "pointer",
+                  boxShadow: "0 4px 16px rgba(93,202,165,0.12)",
+                  display: "flex", alignItems: "center", gap: 14,
+                  fontFamily: uiFont,
+                }}
+              >
+                <div style={{
+                  width: 52, height: 52, borderRadius: 16,
+                  background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "white", fontWeight: 900, fontSize: 22,
+                  flexShrink: 0,
+                }}>
+                  {c.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    Code <span style={{ color: C.teal, fontWeight: 800, letterSpacing: 1, fontFamily: dyslexicFont }}>{c.class_code}</span> · {c.student_count ?? 0} student{c.student_count === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <ChevronRight size={20} color={C.muted} />
+              </motion.button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showNewClassroom && (
+        <NewClassroomModal
+          onClose={() => setShowNewClassroom(false)}
+          onCreate={onCreate}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+// ─── Classroom detail view ───────────────────────────────────────────────────
+function ClassroomDetailView({ classroom, onBack, onDeleteClassroom, onRenameClassroom }: {
+  classroom: Classroom;
+  onBack: () => void;
+  onDeleteClassroom: () => void;
+  onRenameClassroom: (name: string) => Promise<void>;
+}) {
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [showNewStudent, setShowNewStudent] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(classroom.name);
+
+  const refresh = useCallback(async () => {
+    setLoading(true); setErr(null);
+    try {
+      const rows = await listStudents(classroom.id);
+      setStudents(rows);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [classroom.id]);
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  const onAdd = async (firstName: string, pin: string) => {
+    try {
+      const s = await addStudent({ classroomId: classroom.id, firstName, pin });
+      setStudents(prev => [...prev, s].sort((a, b) => a.first_name.localeCompare(b.first_name)));
+      setShowNewStudent(false);
+    } catch (e) {
+      throw e;
+    }
+  };
+
+  return (
+    <motion.div
+      className="flex flex-col h-full overflow-y-auto"
+      initial={{ x: 16, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
+      style={{ fontFamily: uiFont, background: `linear-gradient(160deg, ${C.tealSoft}, ${C.bg})` }}
+    >
+      {/* Header */}
+      <div className="px-5 pt-12 pb-3 flex items-center gap-3">
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={onBack}
+          style={{
+            width: 44, height: 44, borderRadius: 22,
+            background: C.white,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "none", cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(93,202,165,0.15)",
+          }}
+          aria-label="Back"
+        >
+          <ChevronLeft size={22} color={C.teal} />
+        </motion.button>
+        <div className="flex-1">
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, letterSpacing: 2, textTransform: "uppercase" }}>
+            Classroom
+          </div>
+          {renaming ? (
+            <div className="flex gap-2 items-center" style={{ marginTop: 2 }}>
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                style={{
+                  fontSize: 18, fontWeight: 800, color: C.ink,
+                  padding: "4px 8px", borderRadius: 8,
+                  border: `2px solid ${C.teal}`,
+                  background: C.white, fontFamily: uiFont,
+                  flex: 1, minWidth: 0,
+                }}
+              />
+              <button
+                onClick={async () => {
+                  const trimmed = nameDraft.trim();
+                  if (trimmed && trimmed !== classroom.name) {
+                    await onRenameClassroom(trimmed);
+                  }
+                  setRenaming(false);
+                }}
+                style={{
+                  background: C.teal, color: "white", border: "none",
+                  borderRadius: 8, padding: "6px 10px", fontSize: 11,
+                  fontWeight: 800, cursor: "pointer", fontFamily: uiFont,
+                }}
+              >Save</button>
+              <button
+                onClick={() => { setNameDraft(classroom.name); setRenaming(false); }}
+                style={{
+                  background: C.primarySoft, color: C.muted, border: "none",
+                  borderRadius: 8, padding: "6px 10px", fontSize: 11,
+                  fontWeight: 800, cursor: "pointer", fontFamily: uiFont,
+                }}
+              >Cancel</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setRenaming(true)}
+              style={{
+                background: "transparent", border: "none", padding: 0,
+                fontSize: 20, fontWeight: 800, color: C.ink,
+                textAlign: "left", cursor: "pointer", fontFamily: uiFont,
+              }}
+            >
+              {classroom.name} <span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>✎</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Placeholder card — will become classroom list in Phase B */}
-      <div className="px-6 pb-5">
-        <Card className="p-5" style={{ background: C.white }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 8 }}>
-            Your classrooms
-          </div>
-          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-            No classrooms yet.
+      {/* Class code display — the "hero" for kids to see */}
+      <div className="px-5 pb-4">
+        <Card className="p-5" style={{
+          background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+          color: "white", border: "none",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", opacity: 0.85 }}>
+            Class code
           </div>
           <div style={{
-            marginTop: 12, padding: "12px 14px", borderRadius: 12,
-            background: C.tealSoft, color: C.teal,
-            fontSize: 11, fontWeight: 700, lineHeight: 1.5,
+            fontSize: 46, fontWeight: 900, letterSpacing: 6,
+            fontFamily: dyslexicFont, marginTop: 2, marginBottom: 8,
           }}>
-            👷 Classroom creation, student roster, and the analytics dashboard land in the next slice.
-            You can already add students directly via Supabase for pilot testing.
+            {classroom.class_code}
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.5 }}>
+            Kids type this code + their first name + PIN on the classroom sign-in screen.
           </div>
         </Card>
       </div>
 
-      {/* Sign out */}
-      <div className="px-6 pb-8 mt-auto">
+      {/* Students section */}
+      <div className="px-5 pb-3 flex items-center justify-between">
+        <div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>
+          Students {students.length > 0 && <span style={{ color: C.muted, fontWeight: 600 }}>· {students.length}</span>}
+        </div>
         <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={onSignOut}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setShowNewStudent(true)}
           style={{
-            width: "100%", padding: "14px 20px",
-            borderRadius: 16, border: "none",
-            background: C.primarySoft, color: C.primary,
-            fontWeight: 800, fontSize: 14,
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            padding: "8px 14px", borderRadius: 14, border: "none",
+            background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+            color: "white", fontSize: 12, fontWeight: 800,
             cursor: "pointer", fontFamily: uiFont,
+            boxShadow: `0 4px 12px rgba(93,202,165,0.3)`,
           }}
         >
-          Sign out
+          + Add student
         </motion.button>
       </div>
+
+      <div className="flex-1 overflow-y-auto px-5 pb-5">
+        {loading && <div style={{ textAlign: "center", color: C.muted, fontSize: 12, padding: "20px 0" }}>Loading…</div>}
+        {err && (
+          <div style={{
+            padding: "10px 14px", borderRadius: 14,
+            background: "#FFE0E0", color: "#8A2A2A",
+            fontSize: 12, fontWeight: 700, marginBottom: 12,
+          }}>
+            {err}
+          </div>
+        )}
+        {!loading && students.length === 0 && (
+          <Card className="p-5" style={{ background: C.white, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 6 }}>👥</div>
+            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.5 }}>
+              No students yet. Tap <strong style={{ color: C.teal }}>+ Add student</strong> to create one.
+            </div>
+          </Card>
+        )}
+        {!loading && students.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {students.map(s => (
+              <StudentRowCard
+                key={s.id}
+                student={s}
+                onUpdatePin={async (pin) => {
+                  try {
+                    await updateStudentPin(s.id, pin);
+                    setStudents(prev => prev.map(x => x.id === s.id ? { ...x, pin } : x));
+                  } catch (e) { alert((e as Error).message); }
+                }}
+                onRename={async (name) => {
+                  try {
+                    await renameStudent(s.id, name);
+                    setStudents(prev => prev.map(x => x.id === s.id ? { ...x, first_name: name } : x).sort((a,b)=>a.first_name.localeCompare(b.first_name)));
+                  } catch (e) { alert((e as Error).message); }
+                }}
+                onDelete={async () => {
+                  if (!confirm(`Delete ${s.first_name}? All their progress will be lost.`)) return;
+                  try {
+                    await deleteStudent(s.id);
+                    setStudents(prev => prev.filter(x => x.id !== s.id));
+                  } catch (e) { alert((e as Error).message); }
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom: delete classroom */}
+      <div className="px-5 pb-6 pt-2">
+        <button
+          onClick={onDeleteClassroom}
+          style={{
+            width: "100%", padding: "10px 16px", borderRadius: 12,
+            background: "transparent", color: C.blush,
+            border: `1px solid ${C.blushSoft}`, cursor: "pointer",
+            fontSize: 11, fontWeight: 700, fontFamily: uiFont,
+          }}
+        >
+          Delete this classroom
+        </button>
+      </div>
+
+      {showNewStudent && (
+        <NewStudentModal
+          onClose={() => setShowNewStudent(false)}
+          onCreate={onAdd}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+// ─── One student row (with inline edit affordances) ──────────────────────────
+function StudentRowCard({ student, onUpdatePin, onRename, onDelete }: {
+  student: StudentRow;
+  onUpdatePin: (pin: string) => void | Promise<void>;
+  onRename: (name: string) => void | Promise<void>;
+  onDelete: () => void | Promise<void>;
+}) {
+  const [editingPin, setEditingPin] = useState(false);
+  const [pinDraft, setPinDraft] = useState(student.pin);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(student.first_name);
+
+  return (
+    <div style={{
+      background: C.white, borderRadius: 16, padding: "12px 14px",
+      display: "flex", alignItems: "center", gap: 12,
+      boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+      fontFamily: uiFont,
+    }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: 20,
+        background: C.primarySoft, color: C.primary,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontWeight: 900, fontSize: 15,
+        flexShrink: 0,
+      }}>
+        {student.first_name.charAt(0).toUpperCase()}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {editingName ? (
+          <input
+            autoFocus
+            value={nameDraft}
+            onChange={e => setNameDraft(e.target.value)}
+            onBlur={() => { setEditingName(false); if (nameDraft.trim() && nameDraft !== student.first_name) void onRename(nameDraft.trim()); }}
+            onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setNameDraft(student.first_name); setEditingName(false); } }}
+            style={{
+              fontSize: 14, fontWeight: 800, color: C.ink,
+              padding: "2px 6px", borderRadius: 6,
+              border: `2px solid ${C.teal}`, background: C.white,
+              fontFamily: uiFont, width: "100%",
+            }}
+          />
+        ) : (
+          <button
+            onClick={() => setEditingName(true)}
+            style={{
+              background: "transparent", border: "none", padding: 0,
+              fontSize: 14, fontWeight: 800, color: C.ink,
+              textAlign: "left", cursor: "pointer", fontFamily: uiFont,
+            }}
+          >
+            {student.first_name}
+          </button>
+        )}
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
+          PIN{" "}
+          {editingPin ? (
+            <input
+              autoFocus
+              value={pinDraft}
+              onChange={e => setPinDraft(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onBlur={() => { setEditingPin(false); if (/^\d{4}$/.test(pinDraft) && pinDraft !== student.pin) void onUpdatePin(pinDraft); else setPinDraft(student.pin); }}
+              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setPinDraft(student.pin); setEditingPin(false); } }}
+              style={{
+                fontSize: 12, fontWeight: 800, color: C.ink,
+                padding: "1px 4px", borderRadius: 4,
+                border: `1px solid ${C.teal}`, background: C.white,
+                fontFamily: uiFont, width: 50,
+              }}
+            />
+          ) : (
+            <button
+              onClick={() => setEditingPin(true)}
+              style={{
+                background: "transparent", border: "none", padding: 0,
+                fontSize: 11, fontWeight: 800, color: C.teal,
+                cursor: "pointer", fontFamily: uiFont, letterSpacing: 1,
+              }}
+            >
+              {student.pin} ✎
+            </button>
+          )}
+        </div>
+      </div>
+
+      <button
+        onClick={onDelete}
+        aria-label={`Delete ${student.first_name}`}
+        style={{
+          background: "transparent", border: "none",
+          width: 28, height: 28, borderRadius: 14,
+          color: C.muted, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 18,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ─── Modals ──────────────────────────────────────────────────────────────────
+function NewClassroomModal({ onClose, onCreate }: {
+  onClose: () => void;
+  onCreate: (name: string) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      await onCreate(name.trim());
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ModalShell title="New classroom" onClose={onClose}>
+      <div className="flex flex-col gap-3 pb-2">
+        <Field label="Classroom name" value={name} onChange={setName} placeholder="Kindergarten A" />
+        {err && (
+          <div style={{
+            padding: "8px 12px", borderRadius: 10,
+            background: "#FFE0E0", color: "#8A2A2A",
+            fontSize: 12, fontWeight: 700,
+          }}>{err}</div>
+        )}
+        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+          A unique 6-character class code will be generated automatically.
+        </div>
+        <button
+          onClick={submit}
+          disabled={busy || !name.trim()}
+          style={{
+            padding: "12px 20px", borderRadius: 14, border: "none",
+            background: busy || !name.trim() ? "#CCC" : `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+            color: "white", fontSize: 14, fontWeight: 800,
+            cursor: busy || !name.trim() ? "not-allowed" : "pointer",
+            fontFamily: uiFont,
+          }}
+        >
+          {busy ? "…" : "Create classroom"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function NewStudentModal({ onClose, onCreate }: {
+  onClose: () => void;
+  onCreate: (firstName: string, pin: string) => Promise<void>;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [pin, setPin] = useState(randomPin());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      await onCreate(firstName.trim(), pin);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ModalShell title="Add student" onClose={onClose}>
+      <div className="flex flex-col gap-3 pb-2">
+        <Field label="First name" value={firstName} onChange={setFirstName} placeholder="Maya" autoComplete="off" />
+        <div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>
+            PIN (4 digits)
+          </span>
+          <div className="flex gap-2 mt-1">
+            <input
+              value={pin}
+              onChange={e => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              maxLength={4}
+              inputMode="numeric"
+              style={{
+                flex: 1, padding: "12px 14px", borderRadius: 14,
+                border: `2px solid ${/^\d{4}$/.test(pin) ? C.teal : C.primarySoft}`,
+                background: C.white,
+                fontSize: 18, fontFamily: dyslexicFont,
+                color: C.ink, letterSpacing: 6, textAlign: "center",
+                outline: "none",
+              }}
+            />
+            <button
+              onClick={() => setPin(randomPin())}
+              style={{
+                padding: "0 14px", borderRadius: 14, border: "none",
+                background: C.primarySoft, color: C.primary,
+                fontSize: 12, fontWeight: 800,
+                cursor: "pointer", fontFamily: uiFont,
+              }}
+            >
+              Random
+            </button>
+          </div>
+        </div>
+        {err && (
+          <div style={{
+            padding: "8px 12px", borderRadius: 10,
+            background: "#FFE0E0", color: "#8A2A2A",
+            fontSize: 12, fontWeight: 700,
+          }}>{err}</div>
+        )}
+        <button
+          onClick={submit}
+          disabled={busy || !firstName.trim() || !/^\d{4}$/.test(pin)}
+          style={{
+            padding: "12px 20px", borderRadius: 14, border: "none",
+            background: busy || !firstName.trim() || !/^\d{4}$/.test(pin) ? "#CCC" : `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+            color: "white", fontSize: 14, fontWeight: 800,
+            cursor: busy || !firstName.trim() || !/^\d{4}$/.test(pin) ? "not-allowed" : "pointer",
+            fontFamily: uiFont,
+          }}
+        >
+          {busy ? "…" : "Add student"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalShell({ title, onClose, children }: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      style={{
+        position: "absolute", inset: 0, zIndex: 50,
+        background: "rgba(26,26,46,0.55)", backdropFilter: "blur(4px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 20, fontFamily: uiFont,
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0, y: 12 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ type: "spring", bounce: 0.35 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: C.white, borderRadius: 24,
+          padding: 22, width: "100%", maxWidth: 340,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+        }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div style={{ fontSize: 16, fontWeight: 900, color: C.ink }}>{title}</div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 28, height: 28, borderRadius: 14,
+              background: C.primarySoft, color: C.muted,
+              border: "none", cursor: "pointer", fontSize: 16,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+            aria-label="Close"
+          >×</button>
+        </div>
+        {children}
+      </motion.div>
     </motion.div>
   );
 }
