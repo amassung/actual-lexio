@@ -1963,8 +1963,11 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
           <div style={{ fontSize: 52, fontWeight: 800, color: C.primary, letterSpacing: -1 }}>
             Lexio
           </div>
-          <div style={{ fontSize: 18, color: C.muted, letterSpacing: 2, fontWeight: 500, textTransform: "uppercase" }}>
-            Read · Speak · Grow
+          <div style={{ fontSize: 20, color: C.ink, fontWeight: 700, textAlign: "center", lineHeight: 1.3 }}>
+            Reading, made just for you.
+          </div>
+          <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, textAlign: "center", marginTop: -4 }}>
+            Built for young readers with dyslexia · Ages 4–13
           </div>
         </motion.div>
         <motion.div
@@ -1987,8 +1990,8 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
         <PrimaryBtn onClick={onNext} className="w-full text-lg">
           Let's Begin <ArrowRight size={20} />
         </PrimaryBtn>
-        <p style={{ textAlign: "center", marginTop: 16, color: C.muted, fontSize: 14 }}>
-          Your reading adventure starts here ✦
+        <p style={{ textAlign: "center", marginTop: 16, color: C.muted, fontSize: 13, lineHeight: 1.5 }}>
+          Multi-sensory phonics · Your own cloned voice · Made for how <em>you</em> learn ✦
         </p>
       </motion.div>
     </div>
@@ -2001,9 +2004,11 @@ function OnboardingFlow({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);
   const storeName = useStore(s => s.name);
   const storeAge = useStore(s => s.age);
+  const storeMascot = useStore(s => s.activeMascot);
   const setStore = useStore(s => s.set);
   const [name, setName] = useState(storeName);
   const [age, setAge] = useState<number | null>(storeAge);
+  const [mascot, setMascot] = useState<number>(storeMascot ?? 0);
   const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12, "13+"];
   const allMascots = [
     { Comp: Lexi, name: "Lexi", desc: "Your guide", color: C.lexi },
@@ -2022,6 +2027,7 @@ function OnboardingFlow({ onDone }: { onDone: () => void }) {
     setStore({
       name: name.trim(),
       age,
+      activeMascot: mascot,
       difficultyTier: tierForAge(age),
       onboarded: true,
     });
@@ -2095,29 +2101,60 @@ function OnboardingFlow({ onDone }: { onDone: () => void }) {
             </div>
           </motion.div>
         )}
-        {step === 2 && (
-          <motion.div key="s2" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-full flex flex-col items-center gap-6">
-            <div className="text-center">
-              <div style={{ fontSize: 26, fontWeight: 700, color: C.ink, marginBottom: 6 }}>Meet your friends!</div>
-              <div style={{ fontSize: 15, color: C.muted }}>They're here to help you every step of the way</div>
-            </div>
-            <div className="flex justify-center gap-2 w-full">
-              {allMascots.map(({ Comp, name: n, desc, color }) => (
-                <motion.div
-                  key={n}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: allMascots.findIndex(m => m.name === n) * 0.1, type: "spring" }}
-                  className="flex flex-col items-center gap-1"
-                >
-                  <Comp size={58} pose="happy" />
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.ink }}>{n}</div>
-                  <div style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>{desc}</div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        )}
+        {step === 2 && (() => {
+          const picked = allMascots[mascot] ?? allMascots[0];
+          const PickedComp = picked.Comp;
+          return (
+            <motion.div key="s2" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-full flex flex-col items-center gap-5">
+              <div className="text-center">
+                <div style={{ fontSize: 26, fontWeight: 700, color: C.ink, marginBottom: 6 }}>Pick your buddy!</div>
+                <div style={{ fontSize: 15, color: C.muted }}>They'll cheer you on every step.</div>
+              </div>
+              {/* Big animated preview of the picked mascot */}
+              <motion.div
+                key={mascot}
+                initial={{ scale: 0.7, opacity: 0, rotate: -6 }}
+                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                transition={{ type: "spring", bounce: 0.5 }}
+                style={{
+                  width: 130, height: 130, borderRadius: 65,
+                  background: `${picked.color}22`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <PickedComp size={110} pose="happy" />
+              </motion.div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.ink }}>
+                {picked.name} <span style={{ color: C.muted, fontWeight: 600, fontSize: 13 }}>· {picked.desc}</span>
+              </div>
+              {/* Picker row */}
+              <div className="flex justify-center gap-2 w-full">
+                {allMascots.map(({ Comp, name: n, color }, i) => {
+                  const isActive = i === mascot;
+                  return (
+                    <motion.button
+                      key={n}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setMascot(i)}
+                      style={{
+                        flex: 1, padding: 8, borderRadius: 16,
+                        background: isActive ? `${color}33` : "transparent",
+                        border: isActive ? `2px solid ${color}` : `2px solid transparent`,
+                        cursor: "pointer",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                        transition: "all 0.2s",
+                        fontFamily: uiFont,
+                      }}
+                    >
+                      <Comp size={44} pose={isActive ? "happy" : "idle"} />
+                      <div style={{ fontSize: 10, fontWeight: 800, color: isActive ? C.ink : C.muted }}>{n}</div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          );
+        })()}
       </div>
       <div className="px-8 pb-12">
         <PrimaryBtn
@@ -2139,9 +2176,22 @@ function HomeScreen({ onStartLesson, onTabChange }: {
   const name = useStore(s => s.name) || "friend";
   const streak = useStore(s => s.streak);
   const masteredPhonemes = useStore(s => s.masteredPhonemes);
+  const lessonsCompleted = useStore(s => s.lessonsCompleted);
+  const activeMascot = useStore(s => s.activeMascot);
   const lastLessonId = useStore(s => s.lastLessonId);
   const lastGameKey = useStore(s => s.lastGameKey);
   const lastLesson = lastLessonId ? LESSONS[lastLessonId] : null;
+
+  // First-time welcome moment — auto-hides after 4s so it never gets in the way.
+  const isBrandNew = lessonsCompleted === 0 && streak === 0;
+  const [showWelcome, setShowWelcome] = useState(isBrandNew);
+  useEffect(() => {
+    if (!showWelcome) return;
+    const t = setTimeout(() => setShowWelcome(false), 4200);
+    return () => clearTimeout(t);
+  }, [showWelcome]);
+  const mascotComps = [Lexi, Echo, Glow, Bubble, Brick];
+  const WelcomeMascot = mascotComps[activeMascot] ?? Lexi;
   // Human-readable game names for the Continue card
   const GAME_LABELS: Record<string, { title: string; emoji: string }> = {
     "trace":         { title: "Trace It",       emoji: "✍️" },
@@ -2176,7 +2226,53 @@ function HomeScreen({ onStartLesson, onTabChange }: {
     return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
   })();
   return (
-    <div className="flex flex-col h-full overflow-y-auto" style={{ fontFamily: uiFont, background: C.bg }}>
+    <div className="flex flex-col h-full overflow-y-auto" style={{ fontFamily: uiFont, background: C.bg, position: "relative" }}>
+      {/* First-time welcome overlay — mascot pops in, says hi, fades out */}
+      {showWelcome && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={() => setShowWelcome(false)}
+          style={{
+            position: "absolute", inset: 0, zIndex: 60,
+            background: `linear-gradient(160deg, ${C.primarySoft}ee, ${C.tealSoft}ee)`,
+            backdropFilter: "blur(6px)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            gap: 18, padding: 32, cursor: "pointer",
+          }}
+        >
+          <motion.div
+            initial={{ scale: 0.4, y: 30, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            transition={{ type: "spring", bounce: 0.6, delay: 0.1 }}
+          >
+            <WelcomeMascot size={140} pose="happy" />
+          </motion.div>
+          <motion.div
+            initial={{ y: 16, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            style={{ textAlign: "center" }}
+          >
+            <div style={{ fontSize: 30, fontWeight: 900, color: C.ink, lineHeight: 1.15 }}>
+              Hi {name}! 👋
+            </div>
+            <div style={{ fontSize: 15, color: C.muted, marginTop: 6 }}>
+              Let's read something great today.
+            </div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2 }}
+            style={{ fontSize: 11, color: C.muted, marginTop: 10 }}
+          >
+            Tap anywhere to start
+          </motion.div>
+        </motion.div>
+      )}
       {/* Header */}
       <div className="px-6 pt-14 pb-2">
         <div className="flex items-center justify-between">
