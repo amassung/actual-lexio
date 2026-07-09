@@ -8708,7 +8708,7 @@ function StudentAISummaryCard({ studentId, studentName, hasEnoughData }: {
             AI Learning Profile
           </div>
           <div style={{ fontSize: 15, fontWeight: 900, marginTop: 2 }}>
-            Powered by Claude
+            Powered by Lexio
           </div>
         </div>
         <div style={{
