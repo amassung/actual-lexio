@@ -9211,32 +9211,76 @@ export default function App() {
     <div
       className="lexio-shell"
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background: `linear-gradient(135deg, #E8E0FF 0%, #FFFDF5 40%, #D4F0E8 100%)`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 16,
+        padding: 0,
         fontFamily: uiFont,
       }}
     >
-      {/* Phone frame */}
+      {/* Responsive rules for the shell — kept inline so the whole app is
+          self-contained. Three breakpoints:
+            📱 phone     (≤640px) — fullscreen edge-to-edge, no phone frame
+            📱 tablet    (641–1023px) — fullscreen, content centered at 500px
+            💻 desktop   (≥1024px) — 390×844 phone frame preview */}
+      <style>{`
+        .lexio-shell {
+          padding: 0 !important;
+        }
+        /* Phone: full viewport, no frame. */
+        .lexio-phone-frame {
+          width: 100%;
+          max-width: 100%;
+          height: 100dvh;
+          border-radius: 0;
+          box-shadow: none;
+        }
+        .lexio-phone-notch { display: none; }
+
+        /* Tablet: fill the screen but cap content column so nothing stretches. */
+        @media (min-width: 641px) and (max-width: 1023px) {
+          .lexio-shell { padding: 0 !important; }
+          .lexio-phone-frame {
+            width: 100%;
+            max-width: 560px;
+            height: 100dvh;
+            border-radius: 0;
+            box-shadow: 0 0 40px rgba(108, 71, 255, 0.15);
+          }
+        }
+
+        /* Desktop: designer-preview phone frame. */
+        @media (min-width: 1024px) {
+          .lexio-shell { padding: 16px !important; }
+          .lexio-phone-frame {
+            width: 390px;
+            max-width: 390px;
+            height: 844px;
+            border-radius: 52px;
+            box-shadow:
+              0 60px 120px rgba(108, 71, 255, 0.25),
+              0 0 0 12px #1A1A2E,
+              0 0 0 14px rgba(255,255,255,0.3);
+          }
+          .lexio-phone-notch { display: block; }
+        }
+      `}</style>
+
+      {/* Phone frame (dimensions come from the <style> block above) */}
       <div
         className="lexio-phone-frame"
         style={{
-          width: 390,
-          height: 844,
-          borderRadius: 52,
           overflow: "hidden",
           position: "relative",
           background: C.bg,
-          boxShadow: "0 60px 120px rgba(108, 71, 255, 0.25), 0 0 0 12px #1A1A2E, 0 0 0 14px rgba(255,255,255,0.3)",
           flexShrink: 0,
         }}
       >
         {/* TTS loading indicator — subscribes to the shared status bus */}
         <TTSIndicator />
-        {/* Status bar notch */}
+        {/* Status bar notch (desktop-only via CSS) */}
         <div className="lexio-phone-notch" style={{
           position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
           width: 120, height: 34, background: "#1A1A2E", borderRadius: "0 0 20px 20px",
