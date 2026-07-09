@@ -15,8 +15,9 @@ import {
 import {
   listClassrooms, createClassroom, deleteClassroom, renameClassroom,
   listStudents, addStudent, updateStudentPin, renameStudent, deleteStudent,
+  getStudentDetail, getStudentAISummary,
   randomPin,
-  type Classroom, type StudentRow,
+  type Classroom, type StudentRow, type StudentDetail, type AISummary,
 } from "../services/teacherApi";
 import { attachFlushOnHide, flushSyncNow } from "../services/progressSync";
 import { supabaseConfigured } from "../services/supabase";
@@ -8096,6 +8097,7 @@ function ClassroomDetailView({ classroom, onBack, onDeleteClassroom, onRenameCla
   const [showNewStudent, setShowNewStudent] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(classroom.name);
+  const [openStudent, setOpenStudent] = useState<StudentRow | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -8119,6 +8121,17 @@ function ClassroomDetailView({ classroom, onBack, onDeleteClassroom, onRenameCla
       throw e;
     }
   };
+
+  // Sub-view: student analytics + AI summary
+  if (openStudent) {
+    return (
+      <StudentDetailView
+        student={openStudent}
+        classroom={classroom}
+        onBack={() => setOpenStudent(null)}
+      />
+    );
+  }
 
   return (
     <motion.div
@@ -8285,6 +8298,7 @@ function ClassroomDetailView({ classroom, onBack, onDeleteClassroom, onRenameCla
                     setStudents(prev => prev.filter(x => x.id !== s.id));
                   } catch (e) { alert((e as Error).message); }
                 }}
+                onOpenDetail={() => setOpenStudent(s)}
               />
             ))}
           </div>
@@ -8317,11 +8331,517 @@ function ClassroomDetailView({ classroom, onBack, onDeleteClassroom, onRenameCla
 }
 
 // ─── One student row (with inline edit affordances) ──────────────────────────
-function StudentRowCard({ student, onUpdatePin, onRename, onDelete }: {
+// ─── Student detail view — analytics + AI summary ───────────────────────────
+// Per-student dashboard for teachers. Fetches all analytics data in one shot
+// (progress row + up to 500 game sessions + up to 200 lesson completions).
+// The AI summary is fetched lazily on tap to control Claude token spend.
+function StudentDetailView({ student, classroom, onBack }: {
+  student: StudentRow;
+  classroom: Classroom;
+  onBack: () => void;
+}) {
+  const [detail, setDetail] = useState<StudentDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true); setErr(null);
+      try {
+        const d = await getStudentDetail(student.id);
+        setDetail(d);
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [student.id]);
+
+  // Human labels for game keys used in the aggregate table
+  const gameLabels: Record<string, { title: string; emoji: string }> = {
+    "trace":         { title: "Trace It",       emoji: "✍️" },
+    "build":         { title: "Word Builder",   emoji: "🧱" },
+    "flashcards":    { title: "Flashcards",     emoji: "🃏" },
+    "listen-up":     { title: "Listen Up",      emoji: "👂" },
+    "fill-blank":    { title: "Fill the Blank", emoji: "🧩" },
+    "photo-touch":   { title: "Photo Touch",    emoji: "📸" },
+    "sound-match":   { title: "Sound Match",    emoji: "🔊" },
+    "memory":        { title: "Memory Cards",   emoji: "🧠" },
+    "true-false":    { title: "True or False",  emoji: "✅" },
+    "spelling-bee":  { title: "Spelling Bee",   emoji: "🐝" },
+    "whats-action":  { title: "What's Happening?", emoji: "🎬" },
+  };
+
+  // Aggregate the raw sessions client-side. Cheap and keeps the RPC tight.
+  const perGame = useMemo(() => {
+    if (!detail) return [];
+    const agg = new Map<string, { key: string; correct: number; total: number; time: number; sessions: number }>();
+    for (const s of detail.sessions) {
+      const cur = agg.get(s.game_key) ?? { key: s.game_key, correct: 0, total: 0, time: 0, sessions: 0 };
+      cur.correct += s.correct;
+      cur.total += s.total;
+      cur.time += s.elapsed_ms;
+      cur.sessions += 1;
+      agg.set(s.game_key, cur);
+    }
+    return [...agg.values()].sort((a, b) => (b.sessions - a.sessions));
+  }, [detail]);
+
+  // Per-phoneme mastery: from mastered_phonemes list, plus per-phoneme accuracy
+  // derived from game_sessions (when phoneme is attached).
+  const phonemeStats = useMemo(() => {
+    if (!detail) return [];
+    const agg = new Map<string, { phoneme: string; correct: number; total: number; sessions: number; mastered: boolean }>();
+    const mastered = new Set(detail.progress?.mastered_phonemes ?? []);
+    for (const s of detail.sessions) {
+      if (!s.phoneme) continue;
+      const p = s.phoneme.toLowerCase();
+      const cur = agg.get(p) ?? { phoneme: p, correct: 0, total: 0, sessions: 0, mastered: mastered.has(p) };
+      cur.correct += s.correct;
+      cur.total += s.total;
+      cur.sessions += 1;
+      agg.set(p, cur);
+    }
+    // Also include mastered phonemes even if we don't have session data yet
+    for (const m of mastered) {
+      if (!agg.has(m.toLowerCase())) {
+        agg.set(m.toLowerCase(), { phoneme: m.toLowerCase(), correct: 0, total: 0, sessions: 0, mastered: true });
+      }
+    }
+    return [...agg.values()].sort((a, b) => (b.sessions + (b.mastered ? 100 : 0)) - (a.sessions + (a.mastered ? 100 : 0)));
+  }, [detail]);
+
+  const strugglePoints = useMemo(() => {
+    return phonemeStats
+      .filter(p => p.total >= 5) // require some volume to be meaningful
+      .sort((a, b) => (a.correct / a.total) - (b.correct / b.total))
+      .slice(0, 3);
+  }, [phonemeStats]);
+
+  const totalTimeMin = useMemo(() => {
+    if (!detail) return 0;
+    const totalMs = detail.sessions.reduce((n, s) => n + s.elapsed_ms, 0);
+    return Math.round(totalMs / 60000);
+  }, [detail]);
+
+  const fmtPct = (c: number, t: number) => t > 0 ? `${Math.round((c / t) * 100)}%` : "—";
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
+
+  return (
+    <motion.div
+      className="flex flex-col h-full overflow-y-auto"
+      initial={{ x: 16, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
+      style={{ fontFamily: uiFont, background: `linear-gradient(160deg, ${C.tealSoft}, ${C.bg})` }}
+    >
+      {/* Header */}
+      <div className="px-5 pt-12 pb-3 flex items-center gap-3">
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={onBack}
+          style={{
+            width: 44, height: 44, borderRadius: 22,
+            background: C.white,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "none", cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(93,202,165,0.15)",
+          }}
+          aria-label="Back to roster"
+        >
+          <ChevronLeft size={22} color={C.teal} />
+        </motion.button>
+        <div className="flex-1">
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, letterSpacing: 2, textTransform: "uppercase" }}>
+            {classroom.name}
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: C.ink, lineHeight: 1.1 }}>
+            {student.first_name}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+            Code {classroom.class_code} · PIN {student.pin}
+          </div>
+        </div>
+        <div style={{
+          width: 52, height: 52, borderRadius: 26,
+          background: `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`,
+          color: "white", fontWeight: 900, fontSize: 22,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+        }}>
+          {student.first_name.charAt(0).toUpperCase()}
+        </div>
+      </div>
+
+      {loading && <div style={{ textAlign: "center", color: C.muted, fontSize: 12, padding: "24px 0" }}>Loading progress…</div>}
+      {err && (
+        <div className="mx-5 mb-4" style={{
+          padding: "10px 14px", borderRadius: 14,
+          background: "#FFE0E0", color: "#8A2A2A",
+          fontSize: 12, fontWeight: 700,
+        }}>{err}</div>
+      )}
+
+      {!loading && detail && (
+        <>
+          {/* AI summary — the differentiator */}
+          <div className="px-5 pb-4">
+            <StudentAISummaryCard studentId={student.id} studentName={student.first_name} hasEnoughData={detail.sessions.length >= 3 || detail.completions.length >= 1} />
+          </div>
+
+          {/* At-a-glance stats */}
+          <div className="px-5 pb-4">
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 10 }}>
+              At a glance
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <StatCard label="XP" value={(detail.progress?.xp ?? 0).toLocaleString()} color={C.primary} />
+              <StatCard label="Streak" value={`${detail.progress?.streak ?? 0} 🔥`} color={C.amber} />
+              <StatCard label="Lessons" value={`${detail.progress?.lessons_completed ?? 0}`} color={C.teal} />
+              <StatCard label="Time played" value={`${totalTimeMin} min`} color={C.blush} />
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+              Last active: {fmtDate(detail.progress?.last_session_day ?? null)}
+            </div>
+          </div>
+
+          {/* Per-game accuracy */}
+          <div className="px-5 pb-4">
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 10 }}>
+              How they learn — per game
+            </div>
+            <Card className="p-3 flex flex-col gap-2" style={{ background: C.white }}>
+              {perGame.length === 0 && (
+                <div style={{ fontSize: 12, color: C.muted, padding: "8px 4px" }}>
+                  No games played yet.
+                </div>
+              )}
+              {perGame.map(g => {
+                const label = gameLabels[g.key] ?? { title: g.key, emoji: "🎮" };
+                const pct = g.total > 0 ? Math.round((g.correct / g.total) * 100) : null;
+                return (
+                  <div key={g.key} style={{
+                    display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 10, alignItems: "center",
+                  }}>
+                    <div style={{ fontSize: 20, textAlign: "center" }}>{label.emoji}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{label.title}</div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
+                        {g.sessions} play{g.sessions === 1 ? "" : "s"} · {Math.round(g.time / 1000)}s
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: "4px 10px", borderRadius: 10,
+                      background: pct !== null ? (pct >= 80 ? C.tealSoft : pct >= 60 ? C.amberSoft : C.blushSoft) : C.primarySoft,
+                      color: pct !== null ? (pct >= 80 ? C.teal : pct >= 60 ? C.amber : C.blush) : C.muted,
+                      fontSize: 12, fontWeight: 800,
+                      minWidth: 44, textAlign: "center",
+                    }}>
+                      {pct !== null ? `${pct}%` : "—"}
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+
+          {/* Phoneme heatmap */}
+          <div className="px-5 pb-4">
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 10 }}>
+              Phoneme mastery
+            </div>
+            {phonemeStats.length === 0 && (
+              <Card className="p-4" style={{ background: C.white }}>
+                <div style={{ fontSize: 12, color: C.muted, textAlign: "center" }}>
+                  Not enough data yet.
+                </div>
+              </Card>
+            )}
+            {phonemeStats.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+                {phonemeStats.map(p => {
+                  const pct = p.total > 0 ? p.correct / p.total : null;
+                  const bg = p.mastered
+                    ? `linear-gradient(135deg, ${C.teal}, ${C.echoDark})`
+                    : pct === null ? C.primarySoft
+                      : pct >= 0.8 ? C.tealSoft
+                        : pct >= 0.6 ? C.amberSoft
+                          : C.blushSoft;
+                  const color = p.mastered ? "white"
+                    : pct === null ? C.muted
+                      : pct >= 0.8 ? C.teal
+                        : pct >= 0.6 ? C.amber
+                          : C.blush;
+                  return (
+                    <div key={p.phoneme} style={{
+                      background: bg, color,
+                      borderRadius: 10, padding: "10px 4px",
+                      textAlign: "center",
+                      fontFamily: uiFont,
+                    }}>
+                      <div style={{ fontSize: 15, fontWeight: 900, fontFamily: dyslexicFont, textTransform: "lowercase" }}>
+                        {p.phoneme}
+                      </div>
+                      <div style={{ fontSize: 9, fontWeight: 700, marginTop: 1, opacity: 0.85 }}>
+                        {p.mastered ? "MASTER" : pct !== null ? `${Math.round(pct * 100)}%` : "new"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Struggle points */}
+          {strugglePoints.length > 0 && (
+            <div className="px-5 pb-4">
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 10 }}>
+                Focus areas
+              </div>
+              <Card className="p-3" style={{ background: C.blushSoft }}>
+                <div style={{ fontSize: 12, color: "#8A2A2A", lineHeight: 1.5 }}>
+                  Lowest accuracy sounds. Consider extra practice with these:
+                </div>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {strugglePoints.map(p => (
+                    <div key={p.phoneme} style={{
+                      padding: "4px 10px", borderRadius: 8,
+                      background: "white", color: "#8A2A2A",
+                      fontSize: 11, fontWeight: 800,
+                      fontFamily: dyslexicFont, textTransform: "lowercase",
+                    }}>
+                      {p.phoneme} · {fmtPct(p.correct, p.total)}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Recent activity */}
+          <div className="px-5 pb-8">
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 10 }}>
+              Recent lessons
+            </div>
+            <Card className="p-3" style={{ background: C.white }}>
+              {detail.completions.length === 0 && (
+                <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "8px 0" }}>
+                  No lessons finished yet.
+                </div>
+              )}
+              {detail.completions.slice(0, 8).map(c => (
+                <div key={c.id} style={{
+                  display: "flex", justifyContent: "space-between",
+                  fontSize: 12, padding: "6px 0",
+                  borderBottom: `1px solid ${C.primarySoft}`,
+                }}>
+                  <span style={{ color: C.ink, fontWeight: 700 }}>{c.phoneme}</span>
+                  <span style={{ color: C.muted }}>
+                    +{c.xp_earned} XP · {fmtDate(c.completed_at)}
+                  </span>
+                </div>
+              ))}
+            </Card>
+          </div>
+        </>
+      )}
+    </motion.div>
+  );
+}
+
+// Small stat tile used in the "At a glance" grid
+function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{
+      background: C.white, borderRadius: 14, padding: "10px 12px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+      fontFamily: uiFont,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 900, color, marginTop: 2 }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ─── AI Profile Summary card ─────────────────────────────────────────────────
+// Calls /api/summarize-student on tap. Never stores the summary — always
+// regenerates. Cheap enough to be on-demand.
+function StudentAISummaryCard({ studentId, studentName, hasEnoughData }: {
+  studentId: string;
+  studentName: string;
+  hasEnoughData: boolean;
+}) {
+  const [summary, setSummary] = useState<AISummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const generate = async () => {
+    if (loading) return;
+    setLoading(true); setErr(null);
+    try {
+      const s = await getStudentAISummary(studentId);
+      setSummary(s);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="p-4" style={{
+      background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+      color: "white", border: "none",
+    }}>
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", opacity: 0.85 }}>
+            AI Learning Profile
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 900, marginTop: 2 }}>
+            Powered by Claude
+          </div>
+        </div>
+        <div style={{
+          width: 34, height: 34, borderRadius: 17,
+          background: "rgba(255,255,255,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 18,
+        }}>
+          ✨
+        </div>
+      </div>
+
+      {!summary && !loading && (
+        <>
+          <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.5, marginBottom: 10 }}>
+            {hasEnoughData
+              ? `Generate a personalized reading profile for ${studentName} based on their actual game data — strengths, focus areas, best games, and what to work on next.`
+              : `${studentName} needs a bit more practice data before we can generate a profile. Come back after they complete a few games.`}
+          </div>
+          {hasEnoughData && (
+            <button
+              onClick={generate}
+              style={{
+                width: "100%", padding: "10px 16px",
+                background: "white", color: C.primary,
+                border: "none", borderRadius: 12,
+                fontSize: 13, fontWeight: 800,
+                cursor: "pointer", fontFamily: uiFont,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+            >
+              ✨ Generate profile
+            </button>
+          )}
+        </>
+      )}
+
+      {loading && (
+        <div style={{ fontSize: 12, opacity: 0.9, padding: "12px 0", textAlign: "center" }}>
+          Analyzing {studentName}'s learning patterns…
+        </div>
+      )}
+
+      {err && (
+        <div style={{ fontSize: 11, background: "rgba(255,0,0,0.2)", padding: "8px 10px", borderRadius: 8, marginTop: 6 }}>
+          {err}
+        </div>
+      )}
+
+      {summary && (
+        <div className="flex flex-col gap-3 mt-1">
+          <div style={{ fontSize: 13, lineHeight: 1.55 }}>{summary.summary}</div>
+          {summary.strengths.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8, marginBottom: 4 }}>
+                Strengths
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {summary.strengths.map((s, i) => (
+                  <div key={i} style={{
+                    padding: "3px 8px", borderRadius: 8,
+                    background: "rgba(255,255,255,0.2)",
+                    fontSize: 11, fontWeight: 700,
+                  }}>{s}</div>
+                ))}
+              </div>
+            </div>
+          )}
+          {summary.focus_areas.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8, marginBottom: 4 }}>
+                Focus areas
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {summary.focus_areas.map((s, i) => (
+                  <div key={i} style={{
+                    padding: "3px 8px", borderRadius: 8,
+                    background: "rgba(255,255,255,0.2)",
+                    fontSize: 11, fontWeight: 700,
+                  }}>{s}</div>
+                ))}
+              </div>
+            </div>
+          )}
+          {summary.best_games.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8, marginBottom: 4 }}>
+                Learns best through
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {summary.best_games.map((s, i) => (
+                  <div key={i} style={{
+                    padding: "3px 8px", borderRadius: 8,
+                    background: "rgba(255,255,255,0.85)", color: C.primary,
+                    fontSize: 11, fontWeight: 800,
+                  }}>{s}</div>
+                ))}
+              </div>
+            </div>
+          )}
+          {summary.next_focus && (
+            <div style={{
+              background: "rgba(0,0,0,0.15)", padding: "10px 12px", borderRadius: 12,
+              fontSize: 12, lineHeight: 1.5,
+            }}>
+              <strong>Recommended next: </strong>{summary.next_focus}
+            </div>
+          )}
+          <button
+            onClick={generate}
+            disabled={loading}
+            style={{
+              background: "rgba(255,255,255,0.15)",
+              color: "white", border: "none",
+              borderRadius: 10, padding: "6px 10px",
+              fontSize: 10, fontWeight: 800, cursor: "pointer",
+              alignSelf: "flex-start", fontFamily: uiFont,
+            }}
+          >
+            🔄 Regenerate
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function StudentRowCard({ student, onUpdatePin, onRename, onDelete, onOpenDetail }: {
   student: StudentRow;
   onUpdatePin: (pin: string) => void | Promise<void>;
   onRename: (name: string) => void | Promise<void>;
   onDelete: () => void | Promise<void>;
+  onOpenDetail: () => void;
 }) {
   const [editingPin, setEditingPin] = useState(false);
   const [pinDraft, setPinDraft] = useState(student.pin);
@@ -8404,14 +8924,28 @@ function StudentRowCard({ student, onUpdatePin, onRename, onDelete }: {
       </div>
 
       <button
+        onClick={onOpenDetail}
+        aria-label={`View ${student.first_name}'s progress`}
+        style={{
+          background: C.tealSoft, border: "none",
+          padding: "6px 10px", borderRadius: 12,
+          color: C.teal, cursor: "pointer",
+          fontSize: 11, fontWeight: 800,
+          display: "flex", alignItems: "center", gap: 4,
+          fontFamily: uiFont,
+        }}
+      >
+        Progress <ChevronRight size={12} />
+      </button>
+      <button
         onClick={onDelete}
         aria-label={`Delete ${student.first_name}`}
         style={{
           background: "transparent", border: "none",
-          width: 28, height: 28, borderRadius: 14,
+          width: 24, height: 24, borderRadius: 12,
           color: C.muted, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18,
+          fontSize: 16,
         }}
       >
         ×

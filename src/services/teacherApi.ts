@@ -129,6 +129,93 @@ export async function deleteStudent(studentId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// ─── Student detail (analytics) ──────────────────────────────────────────────
+export type StudentProgressRow = {
+  student_id: string;
+  xp: number;
+  streak: number;
+  lessons_completed: number;
+  mastered_phonemes: string[];
+  last_session_day: string | null;
+  hits_in_a_row: number;
+  misses_in_a_row: number;
+  last_lesson_id: string | null;
+  last_game_key: string | null;
+  updated_at: string | null;
+};
+
+export type GameSessionRow = {
+  id: string;
+  student_id: string;
+  game_key: string;
+  phoneme: string | null;
+  correct: number;
+  total: number;
+  elapsed_ms: number;
+  played_at: string;
+};
+
+export type LessonCompletionRow = {
+  id: string;
+  student_id: string;
+  phoneme: string;
+  xp_earned: number;
+  completed_at: string;
+};
+
+export type StudentDetail = {
+  student: StudentRow;
+  progress: StudentProgressRow | null;
+  sessions: GameSessionRow[];
+  completions: LessonCompletionRow[];
+};
+
+export async function getStudentDetail(studentId: string): Promise<StudentDetail> {
+  guard();
+  const [studentRes, progressRes, sessionsRes, completionsRes] = await Promise.all([
+    supabase.from("students").select("*").eq("id", studentId).single(),
+    supabase.from("student_progress").select("*").eq("student_id", studentId).maybeSingle(),
+    supabase.from("game_sessions").select("*").eq("student_id", studentId).order("played_at", { ascending: false }).limit(500),
+    supabase.from("lesson_completions").select("*").eq("student_id", studentId).order("completed_at", { ascending: false }).limit(200),
+  ]);
+  if (studentRes.error) throw new Error(studentRes.error.message);
+  return {
+    student: studentRes.data as StudentRow,
+    progress: (progressRes.data ?? null) as StudentProgressRow | null,
+    sessions: (sessionsRes.data ?? []) as GameSessionRow[],
+    completions: (completionsRes.data ?? []) as LessonCompletionRow[],
+  };
+}
+
+// ─── AI profile summary (calls the Vercel serverless function) ───────────────
+export type AISummary = {
+  summary: string;
+  strengths: string[];
+  focus_areas: string[];
+  best_games: string[];
+  next_focus: string;
+};
+
+export async function getStudentAISummary(studentId: string): Promise<AISummary> {
+  guard();
+  const { data: sess } = await supabase.auth.getSession();
+  const accessToken = sess.session?.access_token;
+  if (!accessToken) throw new Error("Not signed in as teacher.");
+  const res = await fetch("/api/summarize-student", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ studentId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return (await res.json()) as AISummary;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 export function randomPin(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
