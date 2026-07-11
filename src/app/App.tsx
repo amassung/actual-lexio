@@ -4314,7 +4314,7 @@ function FlashcardsGame({ lesson, onFinish, onCorrect }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const cards = useMemo(() => wordsForLesson(lesson).slice(0, 6), [lesson]);
+  const cards = useMemo(() => wordsForLesson(lesson).slice(0, 7), [lesson]);
   const [idx, setIdx] = useState(0);
   const card = cards[idx];
   const isLast = idx >= cards.length - 1;
@@ -4409,7 +4409,7 @@ function ListenUpGame({ lesson, onFinish, onCorrect, onWrong }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const ROUNDS = 4;
+  const ROUNDS = 7;
 
   const rounds = useMemo(() => {
     const pool = wordsForLesson(lesson);
@@ -4536,7 +4536,7 @@ function FillBlankGame({ lesson, onFinish, onCorrect, onWrong }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const ROUNDS = 4;
+  const ROUNDS = 7;
 
   const rounds = useMemo(() => {
     const pool = wordsForLesson(lesson);
@@ -4694,7 +4694,7 @@ function PhotoTouchGame({ lesson, onFinish, onCorrect, onWrong }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const ROUNDS = 4;
+  const ROUNDS = 7;
 
   const rounds = useMemo(() => {
     const pool = wordsForLesson(lesson);
@@ -4820,7 +4820,7 @@ function SoundMatchGame({ lesson, onFinish, onCorrect, onWrong }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const ROUNDS = 3;
+  const ROUNDS = 7;
 
   const rounds = useMemo(() => {
     const phoneme = lesson.phoneme.toLowerCase();
@@ -4987,7 +4987,7 @@ function MemoryCardsGame({ lesson, onFinish, onCorrect, onWrong }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const PAIR_COUNT = 4;
+  const PAIR_COUNT = 6;
 
   type Card = { id: number; word: string; emoji: string; face: "emoji" | "word" };
   const cards = useMemo<Card[]>(() => {
@@ -5118,7 +5118,7 @@ function TrueOrFalseGame({ lesson, onFinish, onCorrect, onWrong }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const ROUNDS = 4;
+  const ROUNDS = 7;
 
   const rounds = useMemo(() => {
     const pool = wordsForLesson(lesson);
@@ -5273,7 +5273,7 @@ function SpellingBeeGame({ lesson, onFinish, onCorrect, onWrong }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const ROUNDS = 3;
+  const ROUNDS = 7;
 
   const rounds = useMemo(() => {
     const pool = wordsForLesson(lesson);
@@ -5438,7 +5438,7 @@ function WhatsTheActionGame({ lesson, onFinish, onCorrect, onWrong }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const ROUNDS = 4;
+  const ROUNDS = 7;
 
   const rounds = useMemo(() => {
     const pool = wordsForLesson(lesson);
