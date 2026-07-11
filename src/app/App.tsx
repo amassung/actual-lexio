@@ -92,6 +92,13 @@ const PHONEME_MAP: Record<string, { text: string; rate: number }> = {
   ch: { text: "ch, ch, ch", rate: 0.5 },
   th: { text: "thhhhhhh", rate: 0.4 },
   wh: { text: "wh, wh", rate: 0.5 },
+  ck: { text: "ki, ki, ki", rate: 0.55 },
+  // Vowel teams — say the long-vowel name they represent
+  ea: { text: "eeeee", rate: 0.4 },
+  ee: { text: "eeeee", rate: 0.4 },
+  ai: { text: "ayyy", rate: 0.45 },
+  oa: { text: "ohhh", rate: 0.4 },
+  oo: { text: "oooo", rate: 0.4 },
   // Vowels — short sounds
   a: { text: "ahh", rate: 0.5 },
   e: { text: "ehh", rate: 0.5 },
@@ -164,6 +171,17 @@ type LessonData = {
   buildTiles: string[];
   xpReward: number;
   isBoss?: boolean;
+  // Content-model additions (all optional → backward compatible):
+  //   lessonType — "letter" (Type A) vs "letter-team" (Type B, digraphs / vowel teams)
+  //   title       — display title shown on Games Grid header (e.g. "ea says ē")
+  //   soundLabel  — phonetic marker for Type B ("ē", "ō", "sh")
+  //   introLine   — teacher-voiced sentence explaining the pattern
+  //   practiceSentence — 1–2 sentence read-aloud line combining pool words
+  lessonType?: "letter" | "letter-team";
+  title?: string;
+  soundLabel?: string;
+  introLine?: string;
+  practiceSentence?: string;
 };
 
 // ─── Word pools for the new mini-games ────────────────────────────────────────
@@ -178,19 +196,29 @@ type LessonData = {
 // word from them in image-only games. Each pool has 5 entries so games have
 // enough variety to draw unique targets across rounds with no repeats.
 const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
-  "m-sound":   [{ word: "moon", emoji: "🌙" }, { word: "monkey", emoji: "🐒" }, { word: "milk", emoji: "🥛" }, { word: "map", emoji: "🗺️" }, { word: "mouse", emoji: "🐭" }],
-  "s-sound":   [{ word: "sun", emoji: "☀️" }, { word: "snake", emoji: "🐍" }, { word: "seal", emoji: "🦭" }, { word: "sock", emoji: "🧦" }, { word: "star", emoji: "⭐" }],
-  "t-sound":   [{ word: "tiger", emoji: "🐯" }, { word: "turtle", emoji: "🐢" }, { word: "ten", emoji: "🔟" }, { word: "tree", emoji: "🌳" }, { word: "taco", emoji: "🌮" }],
-  "short-a":   [{ word: "apple", emoji: "🍎" }, { word: "ant", emoji: "🐜" }, { word: "cat", emoji: "🐱" }, { word: "bag", emoji: "👜" }, { word: "axe", emoji: "🪓" }],
-  "p-sound":   [{ word: "pig", emoji: "🐷" }, { word: "panda", emoji: "🐼" }, { word: "pizza", emoji: "🍕" }, { word: "pumpkin", emoji: "🎃" }, { word: "popcorn", emoji: "🍿" }],
-  "n-sound":   [{ word: "nose", emoji: "👃" }, { word: "nest", emoji: "🪺" }, { word: "nine", emoji: "9️⃣" }, { word: "nut", emoji: "🥜" }, { word: "needle", emoji: "🪡" }],
-  "short-i":   [{ word: "fish", emoji: "🐟" }, { word: "pin", emoji: "📌" }, { word: "ring", emoji: "💍" }, { word: "lips", emoji: "👄" }, { word: "pig", emoji: "🐷" }],
-  "short-e":   [{ word: "egg", emoji: "🥚" }, { word: "bed", emoji: "🛏️" }, { word: "hen", emoji: "🐔" }, { word: "leg", emoji: "🦵" }, { word: "ten", emoji: "🔟" }],
-  "short-o":   [{ word: "octopus", emoji: "🐙" }, { word: "fox", emoji: "🦊" }, { word: "log", emoji: "🪵" }, { word: "frog", emoji: "🐸" }, { word: "dog", emoji: "🐶" }],
-  "short-u":   [{ word: "umbrella", emoji: "☂️" }, { word: "bug", emoji: "🐛" }, { word: "cup", emoji: "☕" }, { word: "duck", emoji: "🦆" }, { word: "drum", emoji: "🥁" }],
-  "sh-sound":  [{ word: "ship", emoji: "🚢" }, { word: "shell", emoji: "🐚" }, { word: "fish", emoji: "🐟" }, { word: "sheep", emoji: "🐑" }, { word: "shoe", emoji: "👟" }],
-  "ch-sound":  [{ word: "cheese", emoji: "🧀" }, { word: "cherry", emoji: "🍒" }, { word: "chair", emoji: "🪑" }, { word: "cheetah", emoji: "🐆" }, { word: "chick", emoji: "🐥" }],
-  "th-sound":  [{ word: "thumb", emoji: "👍" }, { word: "three", emoji: "3️⃣" }, { word: "bath", emoji: "🛁" }, { word: "teeth", emoji: "🦷" }, { word: "thread", emoji: "🧵" }],
+  "m-sound":   [{ word: "moon", emoji: "🌙" }, { word: "monkey", emoji: "🐒" }, { word: "milk", emoji: "🥛" }, { word: "map", emoji: "🗺️" }, { word: "mouse", emoji: "🐭" }, { word: "mango", emoji: "🥭" }, { word: "mushroom", emoji: "🍄" }, { word: "muffin", emoji: "🧁" }, { word: "medal", emoji: "🏅" }, { word: "moose", emoji: "🫎" }],
+  "s-sound":   [{ word: "sun", emoji: "☀️" }, { word: "snake", emoji: "🐍" }, { word: "seal", emoji: "🦭" }, { word: "sock", emoji: "🧦" }, { word: "star", emoji: "⭐" }, { word: "soap", emoji: "🧼" }, { word: "spider", emoji: "🕷️" }, { word: "salad", emoji: "🥗" }, { word: "sandwich", emoji: "🥪" }, { word: "saxophone", emoji: "🎷" }],
+  "t-sound":   [{ word: "tiger", emoji: "🐯" }, { word: "turtle", emoji: "🐢" }, { word: "ten", emoji: "🔟" }, { word: "tree", emoji: "🌳" }, { word: "taco", emoji: "🌮" }, { word: "train", emoji: "🚂" }, { word: "truck", emoji: "🚚" }, { word: "tent", emoji: "⛺" }, { word: "tomato", emoji: "🍅" }, { word: "teddy", emoji: "🧸" }],
+  "short-a":   [{ word: "apple", emoji: "🍎" }, { word: "ant", emoji: "🐜" }, { word: "cat", emoji: "🐱" }, { word: "bag", emoji: "👜" }, { word: "axe", emoji: "🪓" }, { word: "hat", emoji: "🎩" }, { word: "map", emoji: "🗺️" }, { word: "van", emoji: "🚐" }, { word: "fan", emoji: "🌀" }, { word: "bat", emoji: "🦇" }],
+  "p-sound":   [{ word: "pig", emoji: "🐷" }, { word: "panda", emoji: "🐼" }, { word: "pizza", emoji: "🍕" }, { word: "pumpkin", emoji: "🎃" }, { word: "popcorn", emoji: "🍿" }, { word: "penguin", emoji: "🐧" }, { word: "peach", emoji: "🍑" }, { word: "pencil", emoji: "✏️" }, { word: "pear", emoji: "🍐" }, { word: "pineapple", emoji: "🍍" }],
+  "n-sound":   [{ word: "nose", emoji: "👃" }, { word: "nest", emoji: "🪺" }, { word: "nine", emoji: "9️⃣" }, { word: "nut", emoji: "🥜" }, { word: "needle", emoji: "🪡" }, { word: "note", emoji: "🎵" }, { word: "napkin", emoji: "🧻" }, { word: "night", emoji: "🌃" }, { word: "noodle", emoji: "🍜" }, { word: "necklace", emoji: "📿" }],
+  "short-i":   [{ word: "fish", emoji: "🐟" }, { word: "pin", emoji: "📌" }, { word: "ring", emoji: "💍" }, { word: "lips", emoji: "👄" }, { word: "pig", emoji: "🐷" }, { word: "milk", emoji: "🥛" }, { word: "gift", emoji: "🎁" }, { word: "sit", emoji: "🪑" }, { word: "kid", emoji: "🧒" }, { word: "zip", emoji: "🤐" }],
+  "short-e":   [{ word: "egg", emoji: "🥚" }, { word: "bed", emoji: "🛏️" }, { word: "hen", emoji: "🐔" }, { word: "leg", emoji: "🦵" }, { word: "ten", emoji: "🔟" }, { word: "web", emoji: "🕸️" }, { word: "nest", emoji: "🪺" }, { word: "belt", emoji: "🎗️" }, { word: "vest", emoji: "🦺" }, { word: "elf", emoji: "🧝" }],
+  "short-o":   [{ word: "octopus", emoji: "🐙" }, { word: "fox", emoji: "🦊" }, { word: "log", emoji: "🪵" }, { word: "frog", emoji: "🐸" }, { word: "dog", emoji: "🐶" }, { word: "pot", emoji: "🍲" }, { word: "lock", emoji: "🔒" }, { word: "clock", emoji: "🕐" }, { word: "rock", emoji: "🪨" }, { word: "sock", emoji: "🧦" }],
+  "short-u":   [{ word: "umbrella", emoji: "☂️" }, { word: "bug", emoji: "🐛" }, { word: "cup", emoji: "☕" }, { word: "duck", emoji: "🦆" }, { word: "drum", emoji: "🥁" }, { word: "sun", emoji: "☀️" }, { word: "truck", emoji: "🚚" }, { word: "bus", emoji: "🚌" }, { word: "nut", emoji: "🥜" }, { word: "gum", emoji: "🍬" }],
+  "sh-sound":  [{ word: "ship", emoji: "🚢" }, { word: "shell", emoji: "🐚" }, { word: "fish", emoji: "🐟" }, { word: "sheep", emoji: "🐑" }, { word: "shoe", emoji: "👟" }, { word: "shark", emoji: "🦈" }, { word: "shirt", emoji: "👕" }, { word: "shower", emoji: "🚿" }, { word: "shield", emoji: "🛡️" }, { word: "shovel", emoji: "🪏" }],
+  "ch-sound":  [{ word: "cheese", emoji: "🧀" }, { word: "cherry", emoji: "🍒" }, { word: "chair", emoji: "🪑" }, { word: "cheetah", emoji: "🐆" }, { word: "chick", emoji: "🐥" }, { word: "chocolate", emoji: "🍫" }, { word: "chain", emoji: "⛓️" }, { word: "cheek", emoji: "😊" }, { word: "church", emoji: "⛪" }, { word: "chef", emoji: "👨‍🍳" }],
+  "th-sound":  [{ word: "thumb", emoji: "👍" }, { word: "three", emoji: "3️⃣" }, { word: "bath", emoji: "🛁" }, { word: "teeth", emoji: "🦷" }, { word: "thread", emoji: "🧵" }, { word: "throne", emoji: "🪑" }, { word: "thirty", emoji: "3️⃣" }, { word: "thermometer", emoji: "🌡️" }, { word: "thunder", emoji: "⛈️" }, { word: "thorn", emoji: "🌹" }],
+  // ── Long vowel teams (existing lessons) ────────────────────────────────────
+  "long-a":    [{ word: "rain", emoji: "🌧️" }, { word: "train", emoji: "🚂" }, { word: "sail", emoji: "⛵" }, { word: "snail", emoji: "🐌" }, { word: "mail", emoji: "📬" }, { word: "chain", emoji: "⛓️" }, { word: "tail", emoji: "🐕" }, { word: "paint", emoji: "🎨" }, { word: "nail", emoji: "💅" }, { word: "brain", emoji: "🧠" }],
+  "long-e":    [{ word: "feet", emoji: "🦶" }, { word: "tree", emoji: "🌳" }, { word: "bee", emoji: "🐝" }, { word: "sheep", emoji: "🐑" }, { word: "cheese", emoji: "🧀" }, { word: "queen", emoji: "👸" }, { word: "seed", emoji: "🌱" }, { word: "green", emoji: "🟢" }, { word: "wheel", emoji: "☸️" }, { word: "teeth", emoji: "🦷" }],
+  "long-i":    [{ word: "night", emoji: "🌙" }, { word: "light", emoji: "💡" }, { word: "moonlight", emoji: "🌕" }, { word: "sight", emoji: "👀" }, { word: "flight", emoji: "✈️" }, { word: "knight", emoji: "🤺" }, { word: "fright", emoji: "😱" }, { word: "kite", emoji: "🪁" }, { word: "eye", emoji: "👁️" }, { word: "pie", emoji: "🥧" }],
+  "long-o":    [{ word: "boat", emoji: "🚤" }, { word: "coat", emoji: "🧥" }, { word: "goat", emoji: "🐐" }, { word: "toast", emoji: "🍞" }, { word: "soap", emoji: "🧼" }, { word: "road", emoji: "🛣️" }, { word: "toad", emoji: "🐸" }, { word: "oats", emoji: "🌾" }, { word: "float", emoji: "🎈" }, { word: "cloak", emoji: "🧥" }],
+  // ── New letter-team lessons (Type B) ───────────────────────────────────────
+  "ea-team":   [{ word: "beach", emoji: "🏖️" }, { word: "leaf", emoji: "🍃" }, { word: "peach", emoji: "🍑" }, { word: "sea", emoji: "🌊" }, { word: "seal", emoji: "🦭" }, { word: "team", emoji: "👥" }, { word: "read", emoji: "📖" }, { word: "meat", emoji: "🍖" }, { word: "eagle", emoji: "🦅" }, { word: "dream", emoji: "💭" }],
+  "oo-team":   [{ word: "moon", emoji: "🌙" }, { word: "book", emoji: "📖" }, { word: "boot", emoji: "🥾" }, { word: "food", emoji: "🍱" }, { word: "tooth", emoji: "🦷" }, { word: "spoon", emoji: "🥄" }, { word: "broom", emoji: "🧹" }, { word: "pool", emoji: "🏊" }, { word: "zoo", emoji: "🦁" }, { word: "cookie", emoji: "🍪" }],
+  "wh-team":   [{ word: "whale", emoji: "🐋" }, { word: "wheel", emoji: "☸️" }, { word: "wheat", emoji: "🌾" }, { word: "whisker", emoji: "🐱" }, { word: "whistle", emoji: "😗" }, { word: "whisper", emoji: "🤫" }, { word: "white", emoji: "⚪" }, { word: "wheelbarrow", emoji: "🛒" }, { word: "whirl", emoji: "🌀" }, { word: "whip", emoji: "💨" }],
+  "ck-team":   [{ word: "duck", emoji: "🦆" }, { word: "rock", emoji: "🪨" }, { word: "sock", emoji: "🧦" }, { word: "clock", emoji: "🕐" }, { word: "truck", emoji: "🚚" }, { word: "chick", emoji: "🐥" }, { word: "backpack", emoji: "🎒" }, { word: "brick", emoji: "🧱" }, { word: "lock", emoji: "🔒" }, { word: "block", emoji: "🧱" }],
   // ── Level 5: Action Words (verbs in context) ───────────────────────────────
   "action-play": [{ word: "play", emoji: "🎮" }, { word: "paint", emoji: "🎨" }, { word: "push", emoji: "🤚" }, { word: "pull", emoji: "💪" }, { word: "plant", emoji: "🌱" }],
   "action-eat":  [{ word: "eat", emoji: "🍽️" }, { word: "drink", emoji: "🥤" }, { word: "chew", emoji: "😋" }, { word: "sip", emoji: "🥛" }, { word: "snack", emoji: "🍪" }],
@@ -314,6 +342,10 @@ const LESSONS: Record<string, LessonData> = {
   // ── Level 1: Structured Literacy sequence (m, s, t, short-a, p, n) ──────────
   "m-sound": {
     id: "m-sound", phoneme: "M", word: "map", wordEmoji: "🗺️",
+    lessonType: "letter",
+    title: "M says mmm",
+    introLine: "The letter M makes the mmm sound — press your lips together and hum, like tasting something yummy.",
+    practiceSentence: "The monkey has milk, a muffin, and a map by the moon.",
     tipText: 'M says "mmm" — hum with your lips together, like tasting something yummy!',
     phonemeParts: [
       { letters: "M", label: "The sound", highlight: true },
@@ -331,6 +363,10 @@ const LESSONS: Record<string, LessonData> = {
   },
   "s-sound": {
     id: "s-sound", phoneme: "S", word: "sat", wordEmoji: "🧸",
+    lessonType: "letter",
+    title: "S says sss",
+    introLine: "The letter S makes the sss sound — hiss like a snake with your tongue behind your teeth.",
+    practiceSentence: "The snake and the seal sit by the sun near a soft sock.",
     tipText: 'S says "sss" — like a snake hissing! Keep your tongue behind your teeth.',
     phonemeParts: [
       { letters: "S", label: "The sound", highlight: true },
@@ -347,6 +383,10 @@ const LESSONS: Record<string, LessonData> = {
   },
   "t-sound": {
     id: "t-sound", phoneme: "T", word: "tap", wordEmoji: "🚰",
+    lessonType: "letter",
+    title: "T says t",
+    introLine: "The letter T makes a quick t sound — tap your tongue on the roof of your mouth.",
+    practiceSentence: "The tiger and the turtle sit by a tall tree eating tacos.",
     tipText: 'T says "t-t-t" — a quick tap of your tongue on the roof of your mouth!',
     phonemeParts: [
       { letters: "T", label: "The sound", highlight: true },
@@ -363,6 +403,10 @@ const LESSONS: Record<string, LessonData> = {
   },
   "p-sound": {
     id: "p-sound", phoneme: "P", word: "pan", wordEmoji: "🍳",
+    lessonType: "letter",
+    title: "P says p",
+    introLine: "The letter P pops out of your lips — like blowing a tiny bubble.",
+    practiceSentence: "The pig and the penguin share pizza, popcorn, and a peach.",
     tipText: 'P says "p-p-p" — pop your lips together like blowing a tiny bubble!',
     phonemeParts: [
       { letters: "P", label: "The sound", highlight: true },
@@ -380,6 +424,10 @@ const LESSONS: Record<string, LessonData> = {
   },
   "n-sound": {
     id: "n-sound", phoneme: "N", word: "nap", wordEmoji: "😴",
+    lessonType: "letter",
+    title: "N says nnn",
+    introLine: "The letter N makes the nnn sound — feel the buzz in your nose as the air flows through.",
+    practiceSentence: "The nine noisy noodles in the nest hear a note at night.",
     tipText: 'N says "nnn" — feel the buzz in your nose as air flows through!',
     phonemeParts: [
       { letters: "N", label: "The sound", highlight: true },
@@ -405,6 +453,11 @@ const LESSONS: Record<string, LessonData> = {
   // ── Level 2: Remaining short vowels ──────────────────────────────────────────
   "short-a": {
     id: "short-a", phoneme: "A", word: "cat", wordEmoji: "🐱",
+    lessonType: "letter",
+    title: "Short A says ă",
+    soundLabel: "ă",
+    introLine: "Short A says ah — open your mouth wide, like when the doctor says say ah.",
+    practiceSentence: "The cat and the ant sit on a bag with a hat.",
     tipText: 'Short A says "aah" — like when you open wide at the doctor!',
     phonemeParts: [
       { letters: "C", label: "The start", highlight: false },
@@ -419,6 +472,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "short-e": {
     id: "short-e", phoneme: "E", word: "hen", wordEmoji: "🐔",
+    lessonType: "letter",
+    title: "Short E says ĕ",
+    soundLabel: "ĕ",
+    introLine: "Short E says eh — a soft little sound in the middle, like eh, I don't know.",
+    practiceSentence: "The hen laid an egg in the nest by the red bed.",
     tipText: 'Short E says "ehh" — like when you\'re not sure about something!',
     phonemeParts: [
       { letters: "H", label: "The start", highlight: false },
@@ -433,6 +491,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "short-i": {
     id: "short-i", phoneme: "I", word: "big", wordEmoji: "🐘",
+    lessonType: "letter",
+    title: "Short I says ĭ",
+    soundLabel: "ĭ",
+    introLine: "Short I says ih — a quick little sound, like the middle of pig and fish.",
+    practiceSentence: "The pig hid a pin and a ring in the milk.",
     tipText: 'Short I says "ih" — a quick little sound in the middle!',
     phonemeParts: [
       { letters: "B", label: "The start", highlight: false },
@@ -455,6 +518,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "sh-sound": {
     id: "sh-sound", phoneme: "SH", word: "ship", wordEmoji: "🚢",
+    lessonType: "letter-team",
+    title: "SH says shh",
+    soundLabel: "sh",
+    introLine: "When S and H work together, they make one soft sound — shhh, like telling someone to be quiet.",
+    practiceSentence: "The ship sails past a shark, a shell, and a shy fish.",
     tipText: 'SH together make one special sound — like saying "shhhh"!',
     phonemeParts: [
       { letters: "SH", label: "The blend", highlight: true },
@@ -472,6 +540,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "ch-sound": {
     id: "ch-sound", phoneme: "CH", word: "chip", wordEmoji: "🍟",
+    lessonType: "letter-team",
+    title: "CH says ch",
+    soundLabel: "ch",
+    introLine: "When C and H stand together, they make a chuggy sound — ch, ch, ch, like a little train.",
+    practiceSentence: "The chef gives the chick a cherry, cheese, and chocolate.",
     tipText: 'CH makes a sound like a sneeze — "ch ch ch"!',
     phonemeParts: [
       { letters: "CH", label: "The blend", highlight: true },
@@ -489,6 +562,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "th-sound": {
     id: "th-sound", phoneme: "TH", word: "that", wordEmoji: "👉",
+    lessonType: "letter-team",
+    title: "TH says th",
+    soundLabel: "th",
+    introLine: "When T and H work together, put your tongue between your teeth and blow — th, like at the start of thumb.",
+    practiceSentence: "Three thumbs point at the thunder past the thick thread.",
     tipText: 'TH is made by putting your tongue between your teeth — try it!',
     phonemeParts: [
       { letters: "TH", label: "The blend", highlight: true },
@@ -512,8 +590,112 @@ const LESSONS: Record<string, LessonData> = {
     buildSlots: ["SH", "CH", "TH"], buildTiles: ["SH", "CH", "TH", "BL", "ST"],
     xpReward: 50, isBoss: true,
   },
+  // ── Letter-team lessons (Type B — digraphs & vowel teams) ─────────────────
+  "wh-team": {
+    id: "wh-team", phoneme: "WH", word: "whale", wordEmoji: "🐋",
+    lessonType: "letter-team",
+    title: "WH says wh",
+    soundLabel: "wh",
+    introLine: "When W and H work together, they make one puffy sound — wh, like at the start of whale.",
+    practiceSentence: "The white whale spins the wheel and hears a whisper.",
+    tipText: "WH makes a soft puff — like blowing out a candle!",
+    phonemeParts: [
+      { letters: "WH", label: "The team", highlight: true },
+      { letters: "A", label: "Long A", highlight: false },
+      { letters: "LE", label: "Silent E", highlight: false },
+    ],
+    traceStrokes: [
+      "M 40 60 L 80 200", "M 80 200 L 120 60", "M 120 60 L 160 200", "M 160 200 L 200 60",
+      "M 240 60 L 240 200", "M 320 60 L 320 200", "M 240 130 L 320 130",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(whale|what|when|where|why|wheel|whisper|whistle|white|wheat)\b/i,
+    buildSlots: ["WH", "A", "L", "E"], buildTiles: ["WH", "A", "L", "E", "SH", "CH"],
+    xpReward: 25,
+  },
+  "ck-team": {
+    id: "ck-team", phoneme: "CK", word: "duck", wordEmoji: "🦆",
+    lessonType: "letter-team",
+    title: "CK says k",
+    soundLabel: "k",
+    introLine: "When C and K sit together at the end of a word, they make one quick sound — k, like at the end of duck.",
+    practiceSentence: "The duck on the rock hears the clock go tick-tock.",
+    tipText: "CK is a team at the end of short words — it says one quick k!",
+    phonemeParts: [
+      { letters: "D", label: "Start", highlight: false },
+      { letters: "U", label: "Short U", highlight: false },
+      { letters: "CK", label: "The team", highlight: true },
+    ],
+    traceStrokes: [
+      "M 80 60 L 80 200", "M 80 60 Q 260 60 260 130 Q 260 200 80 200",
+      "M 320 60 L 260 130", "M 260 130 L 320 200",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(duck|rock|sock|clock|truck|chick|back|kick|neck|block|brick|lock)\b/i,
+    buildSlots: ["D", "U", "CK"], buildTiles: ["D", "U", "CK", "R", "S", "K"],
+    xpReward: 25,
+  },
+  "ea-team": {
+    id: "ea-team", phoneme: "EA", word: "beach", wordEmoji: "🏖️",
+    lessonType: "letter-team",
+    title: "EA says ē",
+    soundLabel: "ē",
+    introLine: "When E and A get together, they say the long ē sound — like in beach!",
+    practiceSentence: "The seal eats a peach at the beach and reads a book by the sea.",
+    tipText: "EA works as a team — the E does the talking and says its own name!",
+    phonemeParts: [
+      { letters: "B", label: "Start", highlight: false },
+      { letters: "EA", label: "Long E team", highlight: true },
+      { letters: "CH", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 80 60 L 80 200", "M 80 60 Q 200 60 200 100 Q 200 130 80 130",
+      "M 80 130 Q 210 130 210 165 Q 210 200 80 200",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(beach|leaf|peach|sea|seal|team|read|meat|eagle|dream|clean|meal|teach)\b/i,
+    buildSlots: ["B", "EA", "CH"], buildTiles: ["B", "EA", "CH", "S", "L", "T"],
+    xpReward: 25,
+  },
+  "oo-team": {
+    id: "oo-team", phoneme: "OO", word: "moon", wordEmoji: "🌙",
+    lessonType: "letter-team",
+    title: "OO says ōō",
+    soundLabel: "ōō",
+    introLine: "When two O's stand side by side, they stretch into one long sound — oooo, like in moon.",
+    practiceSentence: "The moon glows as a spoon lifts food to a tooth by the pool.",
+    tipText: "OO is a stretched-out sound — hold it long, like a howl!",
+    phonemeParts: [
+      { letters: "M", label: "Start", highlight: false },
+      { letters: "OO", label: "Long OO team", highlight: true },
+      { letters: "N", label: "The end", highlight: false },
+    ],
+    traceStrokes: [
+      "M 60 200 L 60 50", "M 60 50 L 180 150",
+      "M 180 150 L 300 50", "M 300 50 L 300 200",
+    ],
+    traceViewBox: "0 0 360 240",
+    sayAccept: /\b(moon|book|boot|food|tooth|spoon|room|pool|zoo|cool|broom|cookie)\b/i,
+    buildSlots: ["M", "OO", "N"], buildTiles: ["M", "OO", "N", "B", "T", "SP"],
+    xpReward: 25,
+  },
+  "letter-team-boss": {
+    id: "letter-team-boss", phoneme: "EA OO WH CK", word: "teams", wordEmoji: "🏆",
+    lessonType: "letter-team",
+    title: "Letter Team Champion",
+    tipText: "You mastered EA, OO, WH, and CK — real reader powers!",
+    phonemeParts: [], traceStrokes: [], traceViewBox: "0 0 360 240",
+    sayAccept: /.*/,
+    buildSlots: ["EA", "OO", "WH", "CK"], buildTiles: ["EA", "OO", "WH", "CK", "SH", "CH"],
+    xpReward: 75, isBoss: true,
+  },
   "long-a": {
     id: "long-a", phoneme: "AI", word: "rain", wordEmoji: "🌧",
+    lessonType: "letter-team",
+    title: "AI says ā",
+    soundLabel: "ā",
+    introLine: "When A and I team up, the A says its own name — ay, like in rain and train.",
+    practiceSentence: "The train rolls through the rain past a snail on the trail.",
     tipText: 'AI makes the long A sound — it says its own name, "ayyy"!',
     phonemeParts: [
       { letters: "R", label: "The start", highlight: false },
@@ -528,6 +710,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "long-e": {
     id: "long-e", phoneme: "EE", word: "feet", wordEmoji: "🦶",
+    lessonType: "letter-team",
+    title: "EE says ē",
+    soundLabel: "ē",
+    introLine: "When two E's stand together, they stretch into the long ee sound — like in feet and tree.",
+    practiceSentence: "The bee and the sheep meet by the tree to sip green tea.",
     tipText: 'EE makes the long E sound — stretch it out and say "eeee"!',
     phonemeParts: [
       { letters: "F", label: "The start", highlight: false },
@@ -542,6 +729,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "short-o": {
     id: "short-o", phoneme: "O", word: "dog", wordEmoji: "🐶",
+    lessonType: "letter",
+    title: "Short O says ŏ",
+    soundLabel: "ŏ",
+    introLine: "Short O says ah — a round little sound, like the middle of dog and pot.",
+    practiceSentence: "The dog on the log runs past the frog and the pot.",
     tipText: 'Short O says "aah" — a short round sound!',
     phonemeParts: [
       { letters: "D", label: "The start", highlight: false },
@@ -556,6 +748,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "short-u": {
     id: "short-u", phoneme: "U", word: "sun", wordEmoji: "☀",
+    lessonType: "letter",
+    title: "Short U says ŭ",
+    soundLabel: "ŭ",
+    introLine: "Short U says uh — a short, round sound, like the middle of sun and cup.",
+    practiceSentence: "The bug and the duck sit on a cup by the sun.",
     tipText: 'Short U says "uh" — short and round like a bubble!',
     phonemeParts: [
       { letters: "S", label: "The start", highlight: false },
@@ -570,6 +767,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "long-i": {
     id: "long-i", phoneme: "IGH", word: "night", wordEmoji: "🌙",
+    lessonType: "letter-team",
+    title: "IGH says ī",
+    soundLabel: "ī",
+    introLine: "When I, G, and H team up, the I says its own name — eye — and G and H stay silent.",
+    practiceSentence: "The knight takes flight into the bright moonlight at night.",
     tipText: 'IGH makes the long I sound — it says "I" like you say about yourself!',
     phonemeParts: [
       { letters: "N", label: "The start", highlight: false },
@@ -584,6 +786,11 @@ const LESSONS: Record<string, LessonData> = {
   },
   "long-o": {
     id: "long-o", phoneme: "OA", word: "boat", wordEmoji: "🚤",
+    lessonType: "letter-team",
+    title: "OA says ō",
+    soundLabel: "ō",
+    introLine: "When O and A team up, the O says its own name — oh, like in boat and coat.",
+    practiceSentence: "The goat floats on a boat down the road to the toad.",
     tipText: 'OA makes the long O sound — like "oh" when you\'re surprised!',
     phonemeParts: [
       { letters: "B", label: "The start", highlight: false },
@@ -1364,7 +1571,12 @@ const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x
   { id: "sh-sound",    label: "SH Sound",   sub: "ship, shell, fish",  boss: false, x: 80 },
   { id: "ch-sound",    label: "CH Sound",   sub: "chip, chop, much",   boss: false, x: 250 },
   { id: "th-sound",    label: "TH Sound",   sub: "the, this, that",    boss: false, x: 140 },
+  { id: "wh-team",     label: "WH Team",    sub: "whale, wheel, why",  boss: false, x: 60 },
+  { id: "ck-team",     label: "CK Team",    sub: "duck, rock, clock",  boss: false, x: 240 },
+  { id: "ea-team",     label: "EA Team",    sub: "beach, leaf, dream", boss: false, x: 140 },
+  { id: "oo-team",     label: "OO Team",    sub: "moon, book, pool",   boss: false, x: 80 },
   { id: "blend-boss",  label: "Blend Boss!",sub: "Master level",       boss: true,  x: 195 },
+  { id: "letter-team-boss", label: "Team Champion", sub: "EA, OO, WH, CK", boss: true, x: 195 },
   // Level 4 — Long vowels
   { id: "long-a",      label: "Long A",     sub: "rain, tail, wait",   boss: false, x: 80 },
   { id: "long-e",      label: "Long E",     sub: "feet, tree, bee",    boss: false, x: 240 },
@@ -1465,10 +1677,13 @@ const CATEGORIES: LessonCategory[] = [
   {
     id: "blends",
     label: "Blends & Digraphs",
-    sub: "SH, CH, TH",
+    sub: "SH, CH, TH, WH, CK, EA, OO",
     emoji: "🧩",
     gradient: [C.teal, C.echoDark],
-    lessonIds: ["sh-sound", "ch-sound", "th-sound", "blend-boss"],
+    lessonIds: [
+      "sh-sound", "ch-sound", "th-sound", "blend-boss",
+      "wh-team", "ck-team", "ea-team", "oo-team", "letter-team-boss",
+    ],
   },
   {
     id: "long-vowels",
@@ -4099,7 +4314,7 @@ function FlashcardsGame({ lesson, onFinish, onCorrect }: {
   onCorrect?: () => void;
   onWrong?: () => void;
 }) {
-  const cards = useMemo(() => wordsForLesson(lesson).slice(0, 4), [lesson]);
+  const cards = useMemo(() => wordsForLesson(lesson).slice(0, 6), [lesson]);
   const [idx, setIdx] = useState(0);
   const card = cards[idx];
   const isLast = idx >= cards.length - 1;
@@ -5629,6 +5844,49 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
         </div>
       </div>
 
+      {/* Title + intro-line pill — only shown when the lesson has the new
+          metadata. Tapping the pill re-plays the teacher-voiced intro so
+          kids can hear the pattern explained in a full sentence. */}
+      {(lesson.title || lesson.introLine) && (
+        <div className="px-5 pb-3">
+          <div
+            style={{
+              background: C.white,
+              borderRadius: 18,
+              padding: "14px 16px",
+              boxShadow: "0 4px 14px rgba(108,71,255,0.08)",
+              display: "flex", flexDirection: "column", gap: 10,
+            }}
+          >
+            {lesson.title && (
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.ink, lineHeight: 1.15 }}>
+                {lesson.title}
+              </div>
+            )}
+            {lesson.introLine && (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => void playTTS(lesson.introLine!)}
+                style={{
+                  alignSelf: "flex-start",
+                  border: "none", cursor: "pointer",
+                  background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+                  color: "white",
+                  padding: "8px 14px", borderRadius: 999,
+                  fontSize: 12, fontWeight: 800,
+                  fontFamily: uiFont,
+                  display: "flex", alignItems: "center", gap: 6,
+                  boxShadow: "0 4px 12px rgba(108,71,255,0.28)",
+                }}
+                aria-label="Hear the sound explained"
+              >
+                🔊 Hear the sound
+              </motion.button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Last-result toast — shows briefly after each game finishes so you
           can see the tracker fired. */}
       {lastResult && (() => {
@@ -5749,6 +6007,47 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
             );
           })}
         </div>
+
+        {/* Practice-sentence card — only rendered when the lesson has one.
+            Kids (or the teacher) tap the speaker to hear it read aloud. */}
+        {lesson.practiceSentence && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            style={{
+              marginTop: 18,
+              padding: "14px 16px",
+              borderRadius: 18,
+              background: `linear-gradient(135deg, ${C.tealSoft}, ${C.primarySoft})`,
+              display: "flex", alignItems: "center", gap: 12,
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.primary, letterSpacing: 1.4, textTransform: "uppercase", marginBottom: 4 }}>
+                Read it!
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.ink, lineHeight: 1.35 }}>
+                {lesson.practiceSentence}
+              </div>
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => void playTTS(lesson.practiceSentence!)}
+              style={{
+                border: "none", cursor: "pointer",
+                width: 42, height: 42, borderRadius: 21,
+                background: C.white,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 3px 10px rgba(108,71,255,0.15)",
+                flexShrink: 0,
+              }}
+              aria-label="Hear the sentence read aloud"
+            >
+              <span style={{ fontSize: 20 }}>🔊</span>
+            </motion.button>
+          </motion.div>
+        )}
 
         {/* Helper text */}
         <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 18, lineHeight: 1.5 }}>
