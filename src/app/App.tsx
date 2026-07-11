@@ -92,7 +92,7 @@ const PHONEME_MAP: Record<string, { text: string; rate: number }> = {
   ch: { text: "ch, ch, ch", rate: 0.5 },
   th: { text: "thhhhhhh", rate: 0.4 },
   wh: { text: "wh, wh", rate: 0.5 },
-  ck: { text: "ki, ki, ki", rate: 0.55 },
+  ck: { text: "kuh, kuh, kuh", rate: 0.5 },
   // Vowel teams — say the long-vowel name they represent
   ea: { text: "eeeee", rate: 0.4 },
   ee: { text: "eeeee", rate: 0.4 },
@@ -114,13 +114,16 @@ const PHONEME_MAP: Record<string, { text: string; rate: number }> = {
   r: { text: "rrrrrrrr", rate: 0.45 },
   z: { text: "zzzzzzzz", rate: 0.4 },
   v: { text: "vvvvvvvv", rate: 0.4 },
-  // Stops — pair with short "i" rather than schwa "uh"
-  t: { text: "ti, ti, ti", rate: 0.55 },
-  p: { text: "pi, pi, pi", rate: 0.55 },
-  k: { text: "ki, ki, ki", rate: 0.55 },
-  b: { text: "bi, bi, bi", rate: 0.55 },
-  d: { text: "di, di, di", rate: 0.55 },
-  g: { text: "gi, gi, gi", rate: 0.55 },
+  // Stops — use "-uh" schwa spellings. Earlier we used "pi/ti/ki" to avoid
+  // the schwa, but ElevenLabs reads those as English words (pie, tie, key),
+  // which sounds wrong to a phonics teacher. "puh/tuh/kuh" is the standard
+  // Orton-Gillingham pronunciation and reads reliably in TTS.
+  t: { text: "tuh, tuh, tuh", rate: 0.5 },
+  p: { text: "puh, puh, puh", rate: 0.5 },
+  k: { text: "kuh, kuh, kuh", rate: 0.5 },
+  b: { text: "buh, buh, buh", rate: 0.5 },
+  d: { text: "duh, duh, duh", rate: 0.5 },
+  g: { text: "guh, guh, guh", rate: 0.5 },
   // Long vowels — used in CVCe (Magic E) lessons
   a_e: { text: "ayyy", rate: 0.45 }, // long A as in "cake"
   i_e: { text: "iyyy", rate: 0.45 }, // long I as in "bike"
@@ -4931,7 +4934,7 @@ function SoundMatchGame({ lesson, onFinish, onCorrect, onWrong }: {
       </motion.button>
 
       <div style={{ fontSize: 15, fontWeight: 700, color: C.muted, textAlign: "center" }}>
-        Tap every word that starts with <strong style={{ color: C.amber }}>{lesson.phoneme}</strong>
+        Tap every word with the <strong style={{ color: C.amber }}>{lesson.phoneme}</strong> sound
       </div>
 
       {/* 2×2 word grid */}
