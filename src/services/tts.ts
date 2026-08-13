@@ -21,8 +21,14 @@ export type TTSOpts = {
 };
 
 const KEY = (import.meta as any).env?.VITE_ELEVENLABS_API_KEY as string | undefined;
+// "Rachel" — ElevenLabs' standard premade voice, calm/warm American narrator.
+// Swapped in as the default while the cloned "Lexio Teacher" voice is being
+// debugged (a 401 from ElevenLabs is an API-key auth failure, not a bad
+// voice ID, so this alone doesn't fix a broken key — see VITE_ELEVENLABS_API_KEY).
+// Once the clone's ID is confirmed working, set VITE_ELEVENLABS_VOICE_ID back
+// to it in Vercel to override this fallback.
 const DEFAULT_VOICE = ((import.meta as any).env?.VITE_ELEVENLABS_VOICE_ID as string | undefined)
-  ?? "gwN3hEbGhE9zHBbp2V10"; // Lexio Teacher (fallback if env var missing)
+  ?? "21m00Tcm4TlvDq8ikWAM"; // Rachel
 const MODEL_ID = ((import.meta as any).env?.VITE_ELEVENLABS_MODEL_ID as string | undefined)
   ?? "eleven_multilingual_v2"; // highest quality — best for sustained sounds & isolated phonemes
 
