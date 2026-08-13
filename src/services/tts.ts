@@ -81,7 +81,16 @@ async function fetchElevenLabs(text: string, opts: TTSOpts): Promise<Blob> {
       body: JSON.stringify(body),
     },
   );
-  if (!resp.ok) throw new Error(`ElevenLabs ${resp.status}`);
+  if (!resp.ok) {
+    // Surface ElevenLabs' own error detail — a bare status code isn't enough to
+    // tell a bad voice_id from an unavailable model from a rejected parameter.
+    // The body never contains the API key, only the reason the request failed.
+    let detail = "";
+    try {
+      detail = (await resp.text()).slice(0, 300);
+    } catch {}
+    throw new Error(`ElevenLabs ${resp.status}${detail ? ` — ${detail}` : ""}`);
+  }
   const blob = await resp.blob();
   if (blob.size < 100) throw new Error("Empty audio response");
   return blob;
