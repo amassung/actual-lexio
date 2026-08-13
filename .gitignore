@@ -25,3 +25,16 @@ Thumbs.db
 
 # Claude / local tooling
 .claude/launch.json
+
+# iOS / Capacitor build artifacts
+# The Xcode project itself IS committed (it carries signing + config), but
+# generated and machine-local pieces are not. ios/App/App/public is a copy of
+# dist/ produced by `npx cap sync` — never hand-edit it.
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/App/build/
+ios/DerivedData/
+ios/App/Pods/
+ios/App/output/
+*.xcuserdatad/
+xcuserdata/

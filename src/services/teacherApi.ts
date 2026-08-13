@@ -188,6 +188,12 @@ export async function getStudentDetail(studentId: string): Promise<StudentDetail
 }
 
 // ─── AI profile summary (calls the Vercel serverless function) ───────────────
+// On the web build the function is same-origin, so a relative path works. In
+// the native iOS shell the app is served from capacitor://localhost, where
+// "/api/..." resolves to the local bundle and 404s — so we need an absolute
+// origin. VITE_API_BASE_URL supplies it; leave it unset for web builds.
+const API_BASE = ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
+
 export type AISummary = {
   summary: string;
   strengths: string[];
@@ -201,7 +207,7 @@ export async function getStudentAISummary(studentId: string): Promise<AISummary>
   const { data: sess } = await supabase.auth.getSession();
   const accessToken = sess.session?.access_token;
   if (!accessToken) throw new Error("Not signed in as teacher.");
-  const res = await fetch("/api/summarize-student", {
+  const res = await fetch(`${API_BASE}/api/summarize-student`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
