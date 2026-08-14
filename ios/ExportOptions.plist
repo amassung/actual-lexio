@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- app-store-connect: produces an .ipa suitable for TestFlight / App Store. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+
+	<!-- Let Xcode create and download the distribution provisioning profile via
+	     the App Store Connect API key, so no certificates need to be checked in
+	     or stored as secrets beyond the .p8 itself. -->
+	<key>signingStyle</key>
+	<string>automatic</string>
+
+	<!-- Injected from the APPLE_TEAM_ID secret at build time. -->
+	<key>teamID</key>
+	<string>__TEAM_ID__</string>
+
+	<!-- Let Apple manage the app's build-time symbol upload for crash reports. -->
+	<key>uploadSymbols</key>
+	<true/>
+
+	<!-- Thin the binary per-device rather than shipping a universal blob. -->
+	<key>stripSwiftSymbols</key>
+	<true/>
+
+	<!-- We upload in a separate, explicit step so failures are easier to read. -->
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>
