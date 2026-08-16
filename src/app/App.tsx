@@ -199,7 +199,10 @@ type LessonData = {
 // word from them in image-only games. Each pool has 5 entries so games have
 // enough variety to draw unique targets across rounds with no repeats.
 const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
-  "m-sound":   [{ word: "moon", emoji: "🌙" }, { word: "monkey", emoji: "🐒" }, { word: "milk", emoji: "🥛" }, { word: "map", emoji: "🗺️" }, { word: "mouse", emoji: "🐭" }, { word: "mango", emoji: "🥭" }, { word: "mushroom", emoji: "🍄" }, { word: "muffin", emoji: "🧁" }, { word: "medal", emoji: "🏅" }, { word: "moose", emoji: "🫎" }],
+  // "mango" was reported as mispronounced by TTS; "moose"/"medal" are less
+  // decodable for an early reader. Prefer short, common, phonetically plain
+  // words that a beginner can actually attempt to sound out.
+  "m-sound":   [{ word: "moon", emoji: "🌙" }, { word: "monkey", emoji: "🐒" }, { word: "milk", emoji: "🥛" }, { word: "map", emoji: "🗺️" }, { word: "mouse", emoji: "🐭" }, { word: "mud", emoji: "🟤" }, { word: "mushroom", emoji: "🍄" }, { word: "muffin", emoji: "🧁" }, { word: "mask", emoji: "😷" }, { word: "moth", emoji: "🦋" }],
   "s-sound":   [{ word: "sun", emoji: "☀️" }, { word: "snake", emoji: "🐍" }, { word: "seal", emoji: "🦭" }, { word: "sock", emoji: "🧦" }, { word: "star", emoji: "⭐" }, { word: "soap", emoji: "🧼" }, { word: "spider", emoji: "🕷️" }, { word: "salad", emoji: "🥗" }, { word: "sandwich", emoji: "🥪" }, { word: "saxophone", emoji: "🎷" }],
   "t-sound":   [{ word: "tiger", emoji: "🐯" }, { word: "turtle", emoji: "🐢" }, { word: "ten", emoji: "🔟" }, { word: "tree", emoji: "🌳" }, { word: "taco", emoji: "🌮" }, { word: "train", emoji: "🚂" }, { word: "truck", emoji: "🚚" }, { word: "tent", emoji: "⛺" }, { word: "tomato", emoji: "🍅" }, { word: "teddy", emoji: "🧸" }],
   "short-a":   [{ word: "apple", emoji: "🍎" }, { word: "ant", emoji: "🐜" }, { word: "cat", emoji: "🐱" }, { word: "bag", emoji: "👜" }, { word: "axe", emoji: "🪓" }, { word: "hat", emoji: "🎩" }, { word: "map", emoji: "🗺️" }, { word: "van", emoji: "🚐" }, { word: "fan", emoji: "🌀" }, { word: "bat", emoji: "🦇" }],
@@ -215,11 +218,18 @@ const WORD_POOLS: Record<string, { word: string; emoji: string }[]> = {
   // ── Long vowel teams (existing lessons) ────────────────────────────────────
   "long-a":    [{ word: "rain", emoji: "🌧️" }, { word: "train", emoji: "🚂" }, { word: "sail", emoji: "⛵" }, { word: "snail", emoji: "🐌" }, { word: "mail", emoji: "📬" }, { word: "chain", emoji: "⛓️" }, { word: "tail", emoji: "🐕" }, { word: "paint", emoji: "🎨" }, { word: "nail", emoji: "💅" }, { word: "brain", emoji: "🧠" }],
   "long-e":    [{ word: "feet", emoji: "🦶" }, { word: "tree", emoji: "🌳" }, { word: "bee", emoji: "🐝" }, { word: "sheep", emoji: "🐑" }, { word: "cheese", emoji: "🧀" }, { word: "queen", emoji: "👸" }, { word: "seed", emoji: "🌱" }, { word: "green", emoji: "🟢" }, { word: "wheel", emoji: "☸️" }, { word: "teeth", emoji: "🦷" }],
-  "long-i":    [{ word: "night", emoji: "🌙" }, { word: "light", emoji: "💡" }, { word: "moonlight", emoji: "🌕" }, { word: "sight", emoji: "👀" }, { word: "flight", emoji: "✈️" }, { word: "knight", emoji: "🤺" }, { word: "fright", emoji: "😱" }, { word: "kite", emoji: "🪁" }, { word: "eye", emoji: "👁️" }, { word: "pie", emoji: "🥧" }],
+  // Every word must contain the taught grapheme. "kite", "eye", and "pie" make
+  // the same /ī/ sound but spell it i_e / eye / ie — including them in an IGH
+  // lesson teaches sound-guessing instead of decoding the pattern.
+  "long-i":    [{ word: "night", emoji: "🌙" }, { word: "light", emoji: "💡" }, { word: "moonlight", emoji: "🌕" }, { word: "sight", emoji: "👀" }, { word: "flight", emoji: "✈️" }, { word: "knight", emoji: "🤺" }, { word: "fright", emoji: "😱" }, { word: "bright", emoji: "🔆" }, { word: "high", emoji: "⬆️" }, { word: "lightning", emoji: "⚡" }],
   "long-o":    [{ word: "boat", emoji: "🚤" }, { word: "coat", emoji: "🧥" }, { word: "goat", emoji: "🐐" }, { word: "toast", emoji: "🍞" }, { word: "soap", emoji: "🧼" }, { word: "road", emoji: "🛣️" }, { word: "toad", emoji: "🐸" }, { word: "oats", emoji: "🌾" }, { word: "float", emoji: "🎈" }, { word: "cloak", emoji: "🧥" }],
   // ── New letter-team lessons (Type B) ───────────────────────────────────────
   "ea-team":   [{ word: "beach", emoji: "🏖️" }, { word: "leaf", emoji: "🍃" }, { word: "peach", emoji: "🍑" }, { word: "sea", emoji: "🌊" }, { word: "seal", emoji: "🦭" }, { word: "team", emoji: "👥" }, { word: "read", emoji: "📖" }, { word: "meat", emoji: "🍖" }, { word: "eagle", emoji: "🦅" }, { word: "dream", emoji: "💭" }],
-  "oo-team":   [{ word: "moon", emoji: "🌙" }, { word: "book", emoji: "📖" }, { word: "boot", emoji: "🥾" }, { word: "food", emoji: "🍱" }, { word: "tooth", emoji: "🦷" }, { word: "spoon", emoji: "🥄" }, { word: "broom", emoji: "🧹" }, { word: "pool", emoji: "🏊" }, { word: "zoo", emoji: "🦁" }, { word: "cookie", emoji: "🍪" }],
+  // "oo" spells TWO distinct sounds: /uː/ (moon) and /ʊ/ (book). Teaching them
+  // in one lesson conflates them and confuses a decoding reader. This pool is
+  // /uː/ ONLY — "book", "cook", "look", "good", "foot", "wood" belong in a
+  // separate /ʊ/ lesson, which needs an OG-trained specialist to sequence.
+  "oo-team":   [{ word: "moon", emoji: "🌙" }, { word: "boot", emoji: "🥾" }, { word: "food", emoji: "🍱" }, { word: "tooth", emoji: "🦷" }, { word: "spoon", emoji: "🥄" }, { word: "broom", emoji: "🧹" }, { word: "pool", emoji: "🏊" }, { word: "zoo", emoji: "🦁" }, { word: "roof", emoji: "🏠" }, { word: "igloo", emoji: "🧊" }],
   "wh-team":   [{ word: "whale", emoji: "🐋" }, { word: "wheel", emoji: "☸️" }, { word: "wheat", emoji: "🌾" }, { word: "whisker", emoji: "🐱" }, { word: "whistle", emoji: "😗" }, { word: "whisper", emoji: "🤫" }, { word: "white", emoji: "⚪" }, { word: "wheelbarrow", emoji: "🛒" }, { word: "whirl", emoji: "🌀" }, { word: "whip", emoji: "💨" }],
   "ck-team":   [{ word: "duck", emoji: "🦆" }, { word: "rock", emoji: "🪨" }, { word: "sock", emoji: "🧦" }, { word: "clock", emoji: "🕐" }, { word: "truck", emoji: "🚚" }, { word: "chick", emoji: "🐥" }, { word: "backpack", emoji: "🎒" }, { word: "brick", emoji: "🧱" }, { word: "lock", emoji: "🔒" }, { word: "block", emoji: "🧱" }],
   // ── Level 5: Action Words (verbs in context) ───────────────────────────────
@@ -284,10 +294,39 @@ function wordsForLesson(lesson: LessonData): { word: string; emoji: string }[] {
   return [{ word: lesson.word, emoji: lesson.wordEmoji }];
 }
 
+// Words in this lesson that actually contain the target grapheme.
+//
+// Not every lesson has one: `phoneme` doubles as a display label, so it holds
+// things like "Sight Words", "Pets", or "M S T A P N" on vocabulary and boss
+// lessons. Matching words against those yields nothing, which is meaningless
+// to a learner — Sound Match is a phonological-awareness activity and only
+// makes sense when there's a single grapheme to listen for.
+//
+// Returns [] when the lesson isn't a sound-matching candidate; callers should
+// treat that as "this activity doesn't apply here" rather than rendering it.
+function soundMatchTargets(lesson: LessonData): { word: string; emoji: string }[] {
+  const grapheme = lesson.phoneme.trim().toLowerCase();
+  // A real grapheme is a single short alphabetic token (m, sh, igh, a_e).
+  if (!/^[a-z]{1,3}(_e)?$/.test(grapheme)) return [];
+  const pool = WORD_POOLS[lesson.id] ?? wordsForLesson(lesson);
+  const startsWith = pool.filter(w => w.word.toLowerCase().startsWith(grapheme));
+  if (startsWith.length >= 2) return startsWith;
+  return pool.filter(w => w.word.toLowerCase().includes(grapheme));
+}
+
+// Sound Match needs at least two matching words per round to be playable.
+function supportsSoundMatch(lesson: LessonData): boolean {
+  return soundMatchTargets(lesson).length >= 2;
+}
+
 // Take `n` items from `arr` with no repeats. If `arr` is smaller than `n`,
 // reshuffles the remainder (so kids never see the same word twice in a row
 // across rounds; only after the entire pool is exhausted).
 function shuffleAndSlice<T>(arr: T[], n: number): T[] {
+  // An empty source used to fill the result with `undefined`, which then blew
+  // up at the render site with "Cannot read properties of undefined". Callers
+  // are expected to handle a short/empty result instead.
+  if (!arr.length) return [];
   const out: T[] = [];
   let deck = [...arr].sort(() => Math.random() - 0.5);
   for (let i = 0; i < n; i++) {
@@ -663,11 +702,14 @@ const LESSONS: Record<string, LessonData> = {
   "oo-team": {
     id: "oo-team", phoneme: "OO", word: "moon", wordEmoji: "🌙",
     lessonType: "letter-team",
-    title: "OO says ōō",
-    soundLabel: "ōō",
-    introLine: "When two O's stand side by side, they stretch into one long sound — oooo, like in moon.",
-    practiceSentence: "The moon glows as a spoon lifts food to a tooth by the pool.",
-    tipText: "OO is a stretched-out sound — hold it long, like a howl!",
+    // NOT a long vowel. "oo" is a vowel digraph with two sounds — /uː/ (moon)
+    // and /ʊ/ (book). This lesson teaches /uː/ only; the macron notation used
+    // for true long vowels (ā, ē, ī, ō) is deliberately not used here.
+    title: "OO as in moon",
+    soundLabel: "oo",
+    introLine: "When two O's stand together, they often say oooo — like in moon. Listen for that sound.",
+    practiceSentence: "The moon shines as a spoon stirs food by the pool.",
+    tipText: "OO here says oooo, like in moon — hold it long!",
     phonemeParts: [
       { letters: "M", label: "Start", highlight: false },
       { letters: "OO", label: "Long OO team", highlight: true },
@@ -678,7 +720,7 @@ const LESSONS: Record<string, LessonData> = {
       "M 180 150 L 300 50", "M 300 50 L 300 200",
     ],
     traceViewBox: "0 0 360 240",
-    sayAccept: /\b(moon|book|boot|food|tooth|spoon|room|pool|zoo|cool|broom|cookie)\b/i,
+    sayAccept: /\b(moon|boot|food|tooth|spoon|room|pool|zoo|cool|broom|roof|igloo|soon|noon)\b/i,
     buildSlots: ["M", "OO", "N"], buildTiles: ["M", "OO", "N", "B", "T", "SP"],
     xpReward: 25,
   },
@@ -1577,7 +1619,7 @@ const LEARN_PATH_DEF: { id: string; label: string; sub: string; boss: boolean; x
   { id: "wh-team",     label: "WH Team",    sub: "whale, wheel, why",  boss: false, x: 60 },
   { id: "ck-team",     label: "CK Team",    sub: "duck, rock, clock",  boss: false, x: 240 },
   { id: "ea-team",     label: "EA Team",    sub: "beach, leaf, dream", boss: false, x: 140 },
-  { id: "oo-team",     label: "OO Team",    sub: "moon, book, pool",   boss: false, x: 80 },
+  { id: "oo-team",     label: "OO Team",    sub: "moon, spoon, pool",  boss: false, x: 80 },
   { id: "blend-boss",  label: "Blend Boss!",sub: "Master level",       boss: true,  x: 195 },
   { id: "letter-team-boss", label: "Team Champion", sub: "EA, OO, WH, CK", boss: true, x: 195 },
   // Level 4 — Long vowels
@@ -4827,11 +4869,7 @@ function SoundMatchGame({ lesson, onFinish, onCorrect, onWrong }: {
 
   const rounds = useMemo(() => {
     const phoneme = lesson.phoneme.toLowerCase();
-    const samePool = (WORD_POOLS[lesson.id] ?? wordsForLesson(lesson));
-    const matchCandidates = samePool.filter(w => w.word.toLowerCase().startsWith(phoneme));
-    // Fallback to "contains" if not enough start-position matches
-    const matchFallback = samePool.filter(w => w.word.toLowerCase().includes(phoneme));
-    const matchPool = matchCandidates.length >= 2 ? matchCandidates : matchFallback;
+    const matchPool = soundMatchTargets(lesson);
     const distractorPool = Object.values(WORD_POOLS)
       .flat()
       .filter(w => !w.word.toLowerCase().includes(phoneme));
@@ -4847,7 +4885,10 @@ function SoundMatchGame({ lesson, onFinish, onCorrect, onWrong }: {
       const choices = [...matches, ...distractors].sort(() => Math.random() - 0.5);
       const matchSet = new Set(matches.map(m => m.word));
       return { choices, matchSet };
-    });
+    })
+      // Drop any round that couldn't be filled — a short pool yields fewer
+      // rounds rather than a round rendering undefined tiles.
+      .filter(r => r.choices.length > 0 && r.matchSet.size > 0);
   }, [lesson]);
 
   const [round, setRound] = useState(0);
@@ -5628,7 +5669,7 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
 
   // Tile catalog — order matters for the 2-column grid layout.
   // 10 active games + 2 placeholders (Word Sort, Unscramble = next slice).
-  const tiles: GameTile[] = [
+  const tiles: GameTile[] = ([
     { key: "trace",        title: "Trace It",       subtitle: "Write the letter",  emoji: "✍️", gradient: [C.glow,    C.glowDark],      status: "active" },
     { key: "build",        title: "Word Builder",   subtitle: "Build the word",    emoji: "🧱", gradient: [C.amber,   "#E8772E"],       status: "active" },
     { key: "flashcards",   title: "Flashcards",     subtitle: "See & say",         emoji: "🃏", gradient: ["#FFD166", "#F4A261"],       status: "active" },
@@ -5642,7 +5683,12 @@ function GamesGridScreen({ lessonId, onExit }: { lessonId: string; onExit: (less
     { key: "whats-action", title: "What's Happening?", subtitle: "Name the action",emoji: "🎬", gradient: [C.glow,    C.glowDark],      status: "active" },
     { key: "word-sort",    title: "Word Sort",      subtitle: "Sort the sounds",   emoji: "🗂️", gradient: [C.sky,     "#5092C7"],       status: "coming" },
     { key: "unscramble",   title: "Unscramble",     subtitle: "Fix the word",      emoji: "🔀", gradient: ["#A89BFF", "#7C6FE0"],       status: "coming" },
-  ];
+  ] as GameTile[])
+    // Sound Match is phonological-awareness practice: listen for a grapheme,
+    // find the words containing it. Sight-word, vocabulary, and boss lessons
+    // have no single grapheme to listen for, so the activity is meaningless
+    // there — and used to crash. Omit the tile rather than offer a dead end.
+    .filter(t => t.key !== "sound-match" || supportsSoundMatch(lesson));
 
   const playableCount = tiles.filter(t => t.status === "active").length;
   const playedCount = [...completed].filter(k => tiles.find(t => t.key === k)?.status === "active").length;
