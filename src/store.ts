@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { syncLessonCompletion, syncGameSession, syncStudentProgress } from "./services/progressSync";
+import type { SkillProfile } from "./curriculum/placement";
 
 export type TextSize = "small" | "medium" | "large";
 
@@ -87,6 +88,12 @@ export type ProfileSnapshot = {
   // "Continue where you left off" — updated on lesson entry and game launch.
   lastLessonId: string | null;
   lastGameKey: string | null;
+  // Where practice starts, from the placement probe rather than from age.
+  // null means placement hasn't been taken yet. `placementOverriddenBy` records
+  // a teacher's manual change so a later re-placement doesn't silently discard
+  // their judgement.
+  skillProfile: SkillProfile | null;
+  placementOverriddenBy: string | null;
 };
 
 type State = ProfileSnapshot & {
@@ -161,6 +168,8 @@ const emptyProfile = (): ProfileSnapshot => ({
   gameStats: {},
   lastLessonId: null,
   lastGameKey: null,
+  skillProfile: null,
+  placementOverriddenBy: null,
 });
 
 // Extract the profile-level fields from state (excludes actions + profiles map).
@@ -176,6 +185,10 @@ function snapshotOf(s: State): ProfileSnapshot {
     difficultyLevel: s.difficultyLevel, difficultyTier: s.difficultyTier,
     gameStats: s.gameStats,
     lastLessonId: s.lastLessonId, lastGameKey: s.lastGameKey,
+    // Must be included: profile switching round-trips through this snapshot,
+    // so omitting a field silently resets it for every kid on a shared device.
+    skillProfile: s.skillProfile,
+    placementOverriddenBy: s.placementOverriddenBy,
   };
 }
 

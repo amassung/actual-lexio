@@ -12,18 +12,23 @@
 // diagnostic claim. Copy shown to families must not imply otherwise.
 //
 // HOW IT WORKS
-//   Items are grouped by skill band and asked in sequence order. Within each
-//   band the learner answers `ITEMS_PER_BAND` questions. If they miss more than
-//   `CEILING_MISSES`, testing stops — that band is their instructional level.
-//   This is the standard "ceiling rule" used to keep assessments short and
-//   avoid pushing a struggling learner through material they can't access.
+//   Items are grouped by skill band and asked in sequence order. Every item in
+//   a band is asked, then the band passes if the learner got at least
+//   `PASS_THRESHOLD` correct. Testing stops at the first band they don't pass —
+//   that band is their instructional level.
+//
+//   Note the band is always completed rather than abandoned on the first miss.
+//   An earlier version stopped immediately on any wrong answer, which meant a
+//   single mis-tap by a young child ended the whole assessment and placed them
+//   at the very bottom. Asking all three items makes one slip recoverable.
 //
 //   A learner who passes every band starts at the last band with content,
 //   rather than being told there is nothing left to practice.
 //
 // REVIEW NOTES for an OG-trained specialist:
-//   • ITEMS_PER_BAND (3) and CEILING_MISSES (1) are chosen to keep the probe
-//     under ~2 minutes for a young child. Both are tunable below.
+//   • ITEMS_PER_BAND (3) and PASS_THRESHOLD (2) keep the probe under ~2 minutes
+//     for a young child. Both are tunable below. Three items is few for a
+//     reliable judgement — a specialist may want more per band.
 //   • Items use recognition (pick from four) rather than production (say the
 //     sound aloud), because the app cannot reliably score speech. A specialist
 //     may consider this insufficient evidence of decoding skill.
@@ -33,8 +38,8 @@ import { SKILL_BANDS, bandsWithContent, type SkillBandId } from "./scopeAndSeque
 
 /** How many items are asked per band before moving on. */
 export const ITEMS_PER_BAND = 3;
-/** Misses within a band that stop the assessment. */
-export const CEILING_MISSES = 1;
+/** Correct answers needed within a band to count it as passed. */
+export const PASS_THRESHOLD = 2;
 
 export type PlacementItem = {
   id: string;
@@ -141,7 +146,7 @@ export type SkillProfile = {
  * never routed somewhere with nothing to do.
  */
 export function profileFromResults(results: BandResult[]): SkillProfile {
-  const passed = (r: BandResult) => r.total - r.correct <= CEILING_MISSES - 1;
+  const passed = (r: BandResult) => r.correct >= PASS_THRESHOLD;
 
   const firstGap = results.find(r => !passed(r));
   const withContent = bandsWithContent();
